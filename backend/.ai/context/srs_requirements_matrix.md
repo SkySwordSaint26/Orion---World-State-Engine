@@ -1,6 +1,6 @@
 # SRS Requirements Traceability Matrix (SRS v1.0)
 
-This matrix maps every functional requirement (REQ-1 through REQ-51) and non-functional quality attribute from [`backend/docs/srs.md`](../../docs/srs.md) directly to the backend architecture components.
+This matrix maps every functional requirement (REQ-1 through REQ-51) and non-functional quality attribute from [`docs/srs.md`](../../../docs/srs.md) directly to the backend architecture components.
 
 ---
 

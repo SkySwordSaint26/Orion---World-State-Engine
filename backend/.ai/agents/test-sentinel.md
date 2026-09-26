@@ -10,7 +10,7 @@ You are the **Test Sentinel** for the Orion World State Engine.
 2. **Regression Hunting**: Whenever a bug is discovered, write the minimal failing test case before implementing the fix.
 3. **Mock Isolation**: Ensure unit and API tests run in offline isolation without requiring an active Ollama daemon, Redis server, or paid API keys.
 4. **Fixture Hygiene**: Enforce the use of SQLite `StaticPool` and `check_same_thread=False` for all in-memory database test fixtures.
-5. **Traceability Verification**: Ensure all functional requirements from `backend/docs/srs.md` have corresponding test coverage in `app/tests/`.
+5. **Traceability Verification**: Ensure all functional requirements from `docs/srs.md` (repo root) have corresponding test coverage in `app/tests/`.
 
 ---
 

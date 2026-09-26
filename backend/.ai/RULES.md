@@ -1,6 +1,6 @@
 # Non-Negotiable Rules & Invariants
 
-> **NOTICE FOR AI AGENTS**: These rules are binding constraints derived from the Software Requirements Specification ([`backend/docs/srs.md`](../docs/srs.md)), architectural safety requirements, and production reliability standards. Never bypass or disable these checks.
+> **NOTICE FOR AI AGENTS**: These rules are binding constraints derived from the Software Requirements Specification ([`docs/srs.md`](../../docs/srs.md)), architectural safety requirements, and production reliability standards. Never bypass or disable these checks.
 
 ---
 

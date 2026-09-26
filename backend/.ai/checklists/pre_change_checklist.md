@@ -5,7 +5,7 @@ Run through this checklist **before** writing or modifying code.
 ---
 
 ## 1. Requirements & Scope
-- [ ] Have I identified the relevant requirement in [`backend/docs/srs.md`](../../docs/srs.md) or [`srs_requirements_matrix.md`](../context/srs_requirements_matrix.md)?
+- [ ] Have I identified the relevant requirement in [`docs/srs.md`](../../../docs/srs.md) or [`srs_requirements_matrix.md`](../context/srs_requirements_matrix.md)?
 - [ ] Is this change aligned with the [Rules](backend/.ai/RULES.md) (e.g. deterministic contradiction checks, immutable facts, tenant isolation)?
 
 ## 2. Architectural Impact

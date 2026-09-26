@@ -501,7 +501,7 @@ Returns the narrative sequence of events with participant roles and chapter prov
 
 ## 10. Contradictions & Consistency (`/api/v1/worlds/{world_id}/contradictions`)
 
-In compliance with **SRS REQ-27**, contradictions are detected via deterministic Python validation algorithms (cycle checks, co-location conflicts, post-mortem activity).
+In compliance with **SRS REQ-27**, contradictions are detected via deterministic Python rules (immutable facts, age monotonicity, dead-then-alive status, incompatible relationships, temporal cycles). Location-clash and acting-after-death detection are not implemented yet. Each `explanation` begins with a `[RULE_ID]` tag.
 
 ### 10.1 List Contradictions
 - **Method / Endpoint**: `GET /api/v1/worlds/{world_id}/contradictions`

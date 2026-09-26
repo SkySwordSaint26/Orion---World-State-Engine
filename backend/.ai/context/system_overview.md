@@ -67,8 +67,8 @@ backend/storage/
 
 ## 4. Documentation References
 
-- **Software Requirements Specification (SRS v1.0)**: [`backend/docs/srs.md`](../../docs/srs.md)
-- **REST API Reference & Endpoint Specifications**: [`backend/docs/api.md`](../../docs/api.md)
+- **Software Requirements Specification (SRS v1.0)**: [`docs/srs.md`](../../../docs/srs.md)
+- **REST API Reference & Endpoint Specifications**: [`docs/api.md`](../../../docs/api.md)
 - **Database Schema Reference**: [`backend/.ai/context/db_schema_reference.md`](db_schema_reference.md)
 - **API Contracts (AI Agent context)**: [`backend/.ai/context/api_contracts.md`](api_contracts.md)
 
