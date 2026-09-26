@@ -8,7 +8,7 @@ from app.models.world import World
 from app.schemas.manuscript import ManuscriptResponse, ManuscriptDetailResponse
 from app.schemas.chapter import ChapterResponse
 from app.services.manuscript_service import ManuscriptService
-from app.workers.tasks.extraction_task import execute_chapter_extraction
+from app.workers.dispatch import dispatch_extraction_job, ExtractionDispatchError
 
 router = APIRouter()
 
@@ -38,17 +38,11 @@ async def upload_manuscript(
         user_id=world.user_id
     )
 
-    # Queue extraction runs via BackgroundTasks or Celery
-    for run_id, ch_text, ch_id, ch_ver_id in result["extraction_runs"]:
-        background_tasks.add_task(
-            execute_chapter_extraction,
-            world_id=world.id,
-            job_id=result["job_id"],
-            extraction_run_id=run_id,
-            chapter_id=ch_id,
-            chapter_version_id=ch_ver_id,
-            chapter_text=ch_text
-        )
+    # One ordered job per manuscript (chapters run 1..N, stopping at the first failure).
+    try:
+        dispatch_extraction_job(result["job_id"], background_tasks)
+    except ExtractionDispatchError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
     return {
         "job_id": result["job_id"],

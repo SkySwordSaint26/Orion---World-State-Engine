@@ -50,7 +50,7 @@ OPENAI_MODEL="gpt-4o-mini"
 LLM_PROVIDER="mock"
 ```
 
-The [`LLMClient`](../../app/pipeline/llm_client.py) automatically handles fallback to Mock if local Ollama is unreachable.
+The [`LLMClient`](../../app/pipeline/llm_client.py) never falls back automatically: if the configured provider fails, `LLMError` is raised and the extraction run is marked `failed`. The mock engine is used only when `LLM_PROVIDER="mock"` is set explicitly (a warning is logged), and must not be used with real world data.
 
 ---
 

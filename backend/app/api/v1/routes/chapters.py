@@ -6,7 +6,7 @@ from app.api.deps import get_db, get_current_user_world
 from app.models.world import World
 from app.schemas.chapter import ChapterResponse, ChapterUpdate, ChapterVersionResponse, ChapterCreate
 from app.services.chapter_service import ChapterService
-from app.workers.tasks.extraction_task import execute_chapter_extraction
+from app.workers.dispatch import dispatch_extraction_job, ExtractionDispatchError
 
 router = APIRouter()
 
@@ -103,16 +103,10 @@ def update_chapter_content(
             user_id=world.user_id
         )
 
-        background_tasks.add_task(
-            execute_chapter_extraction,
-            world_id=world.id,
-            job_id=job.id,
-            extraction_run_id=run.id,
-            chapter_id=chapter.id,
-            chapter_version_id=version.id,
-            chapter_text=chapter_in.content,
-            chapter_number=chapter.chapter_number
-        )
+        try:
+            dispatch_extraction_job(job.id, background_tasks)
+        except ExtractionDispatchError as e:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
         return {
             "chapter_id": chapter.id,

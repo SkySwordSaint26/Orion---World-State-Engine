@@ -47,6 +47,10 @@ def chunk_text(text: str, max_chars: int = 8000, overlap: int = 500) -> List[Dic
     """
     Split chapter text into manageable overlapping chunks for the LLM.
     Returns list of dicts with 'chunk_id', 'text', 'start_pos', 'end_pos'.
+
+    DEPRECATED - no longer used by extraction (see app/preprocessing: sentence-aligned chunks with exact
+    offsets). Kept only for backward compatibility. Known defects: cuts mid-sentence, 'text' is stripped so
+    start_pos/end_pos do not match it, and it never terminates when overlap >= chunk progress.
     """
     chunks = []
     start = 0

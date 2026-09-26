@@ -1,11 +1,12 @@
 from typing import Dict, Any, Optional, Tuple
-from app.core.constants import RelationshipStatus, ContradictionType
 
-INCOMPATIBLE_RELATIONSHIP_PAIRS = {
-    ("ENEMY_OF", "FRIEND_OF"),
-    ("ENEMY_OF", "MARRIED_TO"),
-    ("DEAD_AT_HANDS_OF", "ALLY_OF")
-}
+from app.consistency import ConsistencyEngine
+from app.consistency import vocabulary as vocab
+from app.consistency.types import RelationshipCheck, RelationshipVersionView
+from app.core.constants import RelationshipStatus
+
+_engine = ConsistencyEngine()
+
 
 def resolve_relationship_update(
     old_type: str,
@@ -14,38 +15,28 @@ def resolve_relationship_update(
     obj_name: str
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     """
-    Evaluates relationship type updates.
+    Compatibility wrapper: evaluates a relationship type change for one entity pair using the
+    deterministic rule engine and the controlled predicate vocabulary.
     Returns: (status, optional_contradiction_info)
     """
     if not old_type:
         return RelationshipStatus.ACTIVE.value, None
 
-    old_norm = old_type.strip().upper()
-    new_norm = new_type.strip().upper()
-
-    if old_norm == new_norm:
+    active = RelationshipStatus.ACTIVE.value
+    check = RelationshipCheck(
+        subject_name=subj_name,
+        object_name=obj_name,
+        new=RelationshipVersionView(None, vocab.normalize_predicate(new_type), active),
+        pair_history=(RelationshipVersionView(None, vocab.normalize_predicate(old_type), active),),
+    )
+    findings = _engine.check_relationship(check)
+    if not findings:
         return RelationshipStatus.ACTIVE.value, None
 
-    # Check for direct incompatibility
-    pair = (old_norm, new_norm)
-    reverse_pair = (new_norm, old_norm)
-
-    is_direct_conflict = (pair in INCOMPATIBLE_RELATIONSHIP_PAIRS or reverse_pair in INCOMPATIBLE_RELATIONSHIP_PAIRS)
-
-    if is_direct_conflict:
-        status = RelationshipStatus.CONTRADICTED.value
-        explanation = (
-            f"Relationship conflict between '{subj_name}' and '{obj_name}': "
-            f"previous relationship '{old_type}' is fundamentally incompatible with new '{new_type}'."
-        )
-        contradiction_info = {
-            "contradiction_type": ContradictionType.RELATIONSHIP_RELATIONSHIP.value,
-            "old_type": old_type,
-            "new_type": new_type,
-            "explanation": explanation
-        }
-        return status, contradiction_info
-
-    # Valid chronological evolution: new version is ACTIVE, old will be marked SUPERSEDED
-    return RelationshipStatus.ACTIVE.value, None
-
+    finding = findings[0]
+    return RelationshipStatus.CONTRADICTED.value, {
+        "contradiction_type": finding.contradiction_type,
+        "old_type": old_type,
+        "new_type": new_type,
+        "explanation": finding.explanation,
+    }

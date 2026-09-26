@@ -75,11 +75,12 @@ sequenceDiagram
     MS-->>API: Return {job_id, manuscript_id, chapters_total}
     API-->>Author: 202 ACCEPTED (polling job_id)
 
-    loop Asynchronous per Chapter
-        API->>Worker: Dispatch execute_chapter_extraction()
-        Worker->>DB: Update ExtractionRun & Job status = "processing"
+    API->>Worker: dispatch_extraction_job(job_id)  (ONE task per job, not per chapter)
+
+    loop Chapters in ascending order (stops at the first failure)
+        Worker->>DB: Claim ExtractionRun (pending -> processing), Job = "processing"
         Worker->>Pipe: extract_chapter(text, chapter_num)
-        Pipe->>Pipe: chunk_text(text, max_chars=8000, overlap=400)
+        Pipe->>Pipe: preprocess_chapter(text) then chunk_document(max_chars=8000, overlap=2 sentences)
         
         loop Per Chunk
             Pipe->>LLM: generate(prompt, json_mode=True)
@@ -90,20 +91,23 @@ sequenceDiagram
         Pipe->>Pipe: cluster_mentions(raw_entities)
         Pipe-->>Worker: Aggregated extraction payload
 
-        Worker->>WS: integrate_extraction_result(world_id, data)
+        Worker->>DB: BEGIN integration transaction: lock world row, check earlier chapters are DONE
+        Worker->>WS: integrate_extraction_result(world_id, data)  (flushes only, never commits)
         WS->>DB: Resolve / Create Entities & Aliases
         WS->>DB: Append FactVersions (ACTIVE, SUPERSEDED, CONTRADICTED)
         WS->>DB: Append RelationshipVersions
         WS->>DB: Insert Events & EventParticipants
 
         Worker->>Rules: run_checks(world_id, events, relations)
-        Note over Rules: Deterministic Checks:<br/>Age monotonicity (REQ-23)<br/>Location clashes (REQ-24)<br/>Post-mortem actions (REQ-26)<br/>Incompatible relations (REQ-25)<br/>Temporal cycles DFS (REQ-27)
+        Note over Rules: Deterministic checks (see context/consistency_engine.md):<br/>Immutable facts, age monotonicity (REQ-23), dead-then-alive status (REQ-26 status part)<br/>Incompatible / single-source relationships (REQ-25), temporal cycles<br/>DEFERRED: location clashes (REQ-24), acting after death (REQ-26)
         Rules->>DB: Insert detected Contradictions
 
-        Worker->>DB: Mark ExtractionRun = "done", increment job.chapters_completed
+        Worker->>DB: Mark ExtractionRun = "done" + COMMIT (one commit for the whole chapter)
+        Worker->>DB: Job progress = recount of run statuses
     end
 
-    Note over Worker,DB: When chapters_completed == chapters_total -> Job status = "done"
+    Note over Worker,DB: Any exception -> ROLLBACK the chapter, run = "failed", later chapters skipped (failed)
+    Note over Worker,DB: Job = "done" only when EVERY run is "done"; any failed run -> Job = "failed"
     Author->>API: GET /jobs/{job_id}/status
     API-->>Author: {status: "done", progress: N/N}
 ```
@@ -127,14 +131,37 @@ sequenceDiagram
 - Specialized repositories encapsulate complex joins and query optimizations (e.g. `get_entity_with_facts` with `joinedload`).
 
 ### Layer 4: Pipeline Layer (`app/pipeline/`)
-- **`llm_client.py`**: Unified interface supporting local Ollama (`/api/chat`), OpenAI API, and an offline heuristic Mock provider for testing.
+- **`llm_client.py`**: Unified interface supporting local Ollama (`/api/chat`), OpenAI API, and an offline heuristic Mock provider. The provider is exactly what `LLM_PROVIDER` says: a provider failure raises `LLMError` (the run fails) and there is no automatic fallback; the mock engine runs only with `LLM_PROVIDER=mock`, and logs a warning when it does.
+- **`app/preprocessing/`** (Phase 3, deterministic, no LLM): paragraph/sentence segmentation with exact offsets and sentence-aligned chunking. Reference: [`context/pipeline_deep_dive.md`](context/pipeline_deep_dive.md).
+- **`app/contracts/`** (Phase 4, no LLM, no DB): typed stage contracts (`EntityMention`, `Relationship`, `Event`, `FactObservation`, `TemporalRelation`, `ExtractionResult`), the `Observation` base with span/sentence-id provenance, boundary validation, and pass-through normalization hooks. Reference: [`context/pipeline_deep_dive.md`](context/pipeline_deep_dive.md) §1b.
+- **`app/resolution/`** (Phase 5, no LLM, no DB): deterministic mention -> entity resolution (exact / normalized / alias / minimal pronoun / new), unresolved-when-ambiguous. Used by `WorldStateService` through `EntityResolutionService`. Reference: [`context/pipeline_deep_dive.md`](context/pipeline_deep_dive.md) §1c.
+- **`app/coreference/`** (Phase 6, no LLM, no DB): high-precision mention clusters (same entity / resolved pronoun / exact text, never ambiguous mentions) and cluster-based entity grounding for relationships, events and facts. Reference: [`context/pipeline_deep_dive.md`](context/pipeline_deep_dive.md) §1d.
+- **`stages/`** (Phase 7, opt-in via `EXTRACTION_PIPELINE=split`): four focused LLM stages (entities, relationships, events, facts), each strictly validated, with sentence-level provenance and explicit mention references. Reference: [`context/pipeline_deep_dive.md`](context/pipeline_deep_dive.md) §1e.
 - **`parsers/extraction_parser.py`**: Strips markdown fences, fixes trailing commas, validates entity/relationship/event structures.
 - **`resolution/entity_resolution.py`**: Computes Jaccard word token similarity and substring containment to cluster ambiguous mentions to canonical entities.
-- **`resolution/fact_resolution.py`**: Compares new observations with current `ACTIVE` fact versions; flags immutable changes as `CONTRADICTED` and state transitions as `SUPERSEDED`.
+- **`resolution/fact_resolution.py`, `resolution/relationship_resolution.py`**: thin compatibility wrappers over the rule engine in `app/consistency/` (`resolve_fact_update`, `resolve_relationship_update`); integration itself calls `ConsistencyService`, which runs the deterministic `ConsistencyEngine`.
+- **`app/consistency/`** (Layer 4b): controlled vocabulary, small independent rules, the LLM-free `ConsistencyEngine`, and the `ContradictionRecorder` (flush-only persistence with deduplication). Reference: [`context/consistency_engine.md`](context/consistency_engine.md).
 
 ### Layer 5: Worker Layer (`app/workers/`)
 - Asynchronous execution engine powered by Celery and Redis.
-- Fallback capability: Every Celery task function has a pure Python execution counterpart (`execute_chapter_extraction`), enabling local dev execution via FastAPI `BackgroundTasks` without needing Redis running.
+- Executor: `EXTRACTION_EXECUTOR=celery` enqueues one `tasks.run_extraction_job` per job on the Celery worker (Redis required); `EXTRACTION_EXECUTOR=background` (default) runs the same `run_extraction_job` function through FastAPI `BackgroundTasks` for local dev without Redis. Chapter ordering does not depend on which executor is used. If Celery cannot be reached the job is marked failed and the API returns 503; there is no silent switch to the other executor.
+
+---
+
+## 3b. Extraction Execution Semantics
+
+**IMPLEMENTED NOW (Phase 1)**
+- One extraction job = one ordered runner (`run_extraction_job`): chapters run 1..N; the first failure stops the job and marks later runs `failed` ("Skipped ...").
+- Chapter integration is one transaction: repositories used by integration flush (`commit=False`), and only `execute_chapter_extraction` commits, together with `ExtractionRun.status = done`. Any exception rolls the whole chapter back.
+- Ordering gate: before integrating, a chapter checks that every lower-numbered chapter of the same manuscript that was submitted for extraction has its latest run `done`; otherwise the run fails without touching world state. Integration also locks the `worlds` row (`SELECT ... FOR UPDATE`, effective on PostgreSQL), so integrations within one world never interleave while different worlds stay independent.
+- Job progress is a recount (`update_job_progress`), never an increment.
+- Deterministic consistency engine (Phase 2): immutable-fact, age-monotonic, dead-then-alive, incompatible-relationship, single-source (`FATHER_OF`) and temporal-cycle rules, run inside the chapter transaction with deduplicated contradiction records. See [`context/consistency_engine.md`](context/consistency_engine.md).
+
+**NOT IMPLEMENTED YET (planned future architecture, later phases)**
+- Property, relationship and temporal **normalization** (not implemented; the rule engine currently sees raw stored names, direction-keyed relationships and single-chapter temporal data). Known limitations and their code markers: [`context/consistency_engine.md`](context/consistency_engine.md#known-limitations-read-before-relying-on-the-results).
+- Consistency rules that are DEFERRED (location clashes REQ-24, speaking/acting after death REQ-26) because the frozen schema and current extraction contract cannot represent the required information. The implemented rules are listed in [`context/consistency_engine.md`](context/consistency_engine.md).
+- The multi-stage extraction pipeline (mention detection, coreference, world-aware entity resolution, separate event/relationship/attribute stages). Extraction is still the single monolithic prompt.
+- Deferred retry when an edit is submitted while earlier chapters of another job are still pending (it currently fails with a "blocked by" message and can be re-run).
 
 ---
 

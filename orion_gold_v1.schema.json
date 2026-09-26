@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orion-wse.local/schema/orion-gold-v1.schema.json",
+  "title": "Orion Gold Annotation Schema",
+  "description": "Machine-readable schema for Orion v1 literary information-extraction gold annotations. This schema represents text-grounded annotations, not resolved database/world-state records.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "story_id",
+    "text",
+    "mentions",
+    "coreference_clusters",
+    "events",
+    "relationships",
+    "facts",
+    "temporal_expressions",
+    "temporal_relations"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "story_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mentions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/mention"
+      }
+    },
+    "coreference_clusters": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/coreferenceCluster"
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relationship"
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fact"
+      }
+    },
+    "temporal_expressions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/temporalExpression"
+      }
+    },
+    "temporal_relations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/temporalRelation"
+      }
+    }
+  },
+  "$defs": {
+    "span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "mention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mention_id",
+        "text",
+        "type",
+        "start",
+        "end"
+      ],
+      "properties": {
+        "mention_id": {
+          "type": "string",
+          "pattern": "^M[0-9]+$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "character",
+            "location",
+            "object",
+            "organization",
+            "other"
+          ]
+        },
+        "mention_kind": {
+          "type": "string",
+          "enum": [
+            "proper",
+            "nominal",
+            "pronominal"
+          ]
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "coreferenceCluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cluster_id",
+        "mentions"
+      ],
+      "properties": {
+        "cluster_id": {
+          "type": "string",
+          "pattern": "^C[0-9]+$"
+        },
+        "mentions": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^M[0-9]+$"
+          }
+        }
+      }
+    },
+    "eventParticipant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "mention_id"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "agent",
+            "patient",
+            "target",
+            "recipient",
+            "location",
+            "instrument",
+            "participant"
+          ]
+        },
+        "mention_id": {
+          "type": "string",
+          "pattern": "^M[0-9]+$"
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "type",
+        "trigger",
+        "start",
+        "end",
+        "participants"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "pattern": "^E[0-9]+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "ARRIVAL",
+            "DEPARTURE",
+            "TRAVEL",
+            "MEETING",
+            "CONVERSATION",
+            "DISCOVERY",
+            "ATTACK",
+            "DEATH",
+            "CONFLICT",
+            "CREATION",
+            "DESTRUCTION",
+            "OTHER"
+          ]
+        },
+        "trigger": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/eventParticipant"
+          }
+        }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relationship_id",
+        "subject_mention_id",
+        "predicate",
+        "object_mention_id"
+      ],
+      "properties": {
+        "relationship_id": {
+          "type": "string",
+          "pattern": "^R[0-9]+$"
+        },
+        "subject_mention_id": {
+          "type": "string",
+          "pattern": "^M[0-9]+$"
+        },
+        "predicate": {
+          "type": "string",
+          "enum": [
+            "FRIEND_OF",
+            "ENEMY_OF",
+            "SIBLING_OF",
+            "PARENT_OF",
+            "CHILD_OF",
+            "MARRIED_TO",
+            "ALLY_OF",
+            "WORKS_FOR",
+            "MEMBER_OF",
+            "OWNS",
+            "KNOWS",
+            "RELATED_TO"
+          ]
+        },
+        "object_mention_id": {
+          "type": "string",
+          "pattern": "^M[0-9]+$"
+        }
+      }
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fact_id",
+        "entity_mention_id",
+        "property",
+        "value"
+      ],
+      "properties": {
+        "fact_id": {
+          "type": "string",
+          "pattern": "^F[0-9]+$"
+        },
+        "entity_mention_id": {
+          "type": "string",
+          "pattern": "^M[0-9]+$"
+        },
+        "property": {
+          "type": "string",
+          "enum": [
+            "birth_place",
+            "date_of_birth",
+            "origin",
+            "eye_color",
+            "hair_color",
+            "species",
+            "age",
+            "occupation",
+            "title",
+            "status",
+            "location"
+          ]
+        },
+        "value": {
+          "type": [
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "temporalExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "temporal_id",
+        "text",
+        "type",
+        "start",
+        "end"
+      ],
+      "properties": {
+        "temporal_id": {
+          "type": "string",
+          "pattern": "^T[0-9]+$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "absolute_time",
+            "relative_time",
+            "duration",
+            "sequence_marker",
+            "other"
+          ]
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "temporalRelation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "temporal_relation_id",
+        "source_event_id",
+        "relation",
+        "target_event_id"
+      ],
+      "properties": {
+        "temporal_relation_id": {
+          "type": "string",
+          "pattern": "^TR[0-9]+$"
+        },
+        "source_event_id": {
+          "type": "string",
+          "pattern": "^E[0-9]+$"
+        },
+        "relation": {
+          "type": "string",
+          "enum": [
+            "BEFORE",
+            "AFTER",
+            "DURING"
+          ]
+        },
+        "target_event_id": {
+          "type": "string",
+          "pattern": "^E[0-9]+$"
+        }
+      }
+    }
+  }
+}

@@ -43,6 +43,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ENVIRONMENT=development
+      - EXTRACTION_EXECUTOR=celery
       - STORAGE_DIR=/backend/storage
     volumes:
       - ./backend/app:/backend/app

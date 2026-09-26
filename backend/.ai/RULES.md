@@ -15,13 +15,14 @@
 ## 2. Rule-Based Contradiction Verification (SRS REQ-27)
 
 - **Rule 2.1**: **NEVER delegate contradiction detection to a Language Model.**
-- **Rule 2.2**: Contradiction detection must be executed via deterministic Python algorithms in [`ConsistencyService`](../app/services/consistency_service.py) or dedicated rule modules.
-- **Rule 2.3**: Mandatory contradiction rule categories:
-  1. **Age Monotonicity (REQ-23)**: Character age cannot decrease across progressing chapters unless explicitly flagged as a flashback.
-  2. **Location Clash (REQ-24)**: A character cannot be in two distinct geographical locations within the same chapter/timeframe.
-  3. **Relationship Incompatibility (REQ-25)**: Mutually exclusive relationship mutations (e.g. `ENEMY_OF` vs `MARRIED_TO`, conflicting parentage).
-  4. **Post-Mortem Actions (REQ-26)**: A character marked with status `DEAD` or whose death event occurred cannot speak, act, or initiate events in later chapters.
-  5. **Temporal Graph Cycles (REQ-27)**: Temporal relations (`BEFORE`/`AFTER`) must form a Directed Acyclic Graph (DAG); cycles detected via DFS must be flagged as `CYCLE` contradictions.
+- **Rule 2.2**: Contradiction detection must be executed via deterministic Python algorithms in [`ConsistencyService`](../app/services/consistency_service.py) or dedicated rule modules (today: `app/consistency/`).
+- **Rule 2.3**: Contradiction rule categories and their status (details: [`context/consistency_engine.md`](context/consistency_engine.md)):
+  1. **Age Monotonicity (REQ-23)** — IMPLEMENTED (`AGE_MONOTONIC`). No flashback marker exists in the data model, so flashbacks can be flagged.
+  2. **Location Clash (REQ-24)** — DEFERRED: the frozen schema has no event location/time, so "same time, two places" cannot be decided.
+  3. **Relationship Incompatibility (REQ-25)** — IMPLEMENTED for the explicit pairs in `consistency/vocabulary.py` and for a changing `FATHER_OF`; other parentage predicates are not covered.
+  4. **Post-Mortem Actions (REQ-26)** — PARTIAL: a later `status` of alive after dead is flagged (`DEAD_THEN_ALIVE`); speaking/acting after death is DEFERRED (no speaker attribution, no participant roles).
+  5. **Temporal Graph Cycles** — IMPLEMENTED (`TEMPORAL_CYCLE`), within one chapter's relations only (temporal relations are not persisted).
+  Rules act only on the controlled vocabulary; unknown properties/predicates never create contradictions.
 
 ---
 

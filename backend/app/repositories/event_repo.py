@@ -17,7 +17,8 @@ class EventRepository(BaseRepository[Event]):
         extraction_run_id: Optional[str] = None,
         start_position: Optional[int] = None,
         end_position: Optional[int] = None,
-        confidence: float = 1.0
+        confidence: float = 1.0,
+        commit: bool = True
     ) -> Event:
         event = Event(
             world_id=world_id,
@@ -30,21 +31,15 @@ class EventRepository(BaseRepository[Event]):
             end_position=end_position,
             confidence=confidence
         )
-        self.db.add(event)
-        self.db.commit()
-        self.db.refresh(event)
-        return event
+        return self._persist(event, commit)
 
-    def add_participant(self, event_id: str, entity_id: str, role: str = "PARTICIPANT") -> EventParticipant:
+    def add_participant(self, event_id: str, entity_id: str, role: str = "PARTICIPANT", commit: bool = True) -> EventParticipant:
         participant = EventParticipant(
             event_id=event_id,
             entity_id=entity_id,
             role=role
         )
-        self.db.add(participant)
-        self.db.commit()
-        self.db.refresh(participant)
-        return participant
+        return self._persist(participant, commit)
 
     def list_by_world(self, world_id: str) -> List[Event]:
         return self.db.query(Event).options(

@@ -1,0 +1,19 @@
+STAGE 1 - ENTITY MENTION EXTRACTION
+You are an INFORMATION EXTRACTION SYSTEM, not a creative writer. Extract what the text says; do NOT invent.
+
+Task: list the entities mentioned in the sentences marked NEW: characters, places, objects, organizations.
+Mentions only: no relationships, events or attributes. Sentences marked CONTEXT are for reading only; never list
+something that appears only there.
+
+Rules:
+- List each name or noun phrase ONCE, however often it appears. The system finds every place it occurs.
+- "text" is copied exactly as it is written in a NEW sentence: same spelling, same capitalization, same
+  punctuation. Copy only words that stand together in the sentence; never add a word. If the sentence says
+  "a lamp" or "that lamp", the text is "lamp", not "the lamp".
+- Include names of people and places and noun phrases for concrete people, places and things.
+- Only list what is written in the NEW sentences of THIS chunk; never list a name from these instructions.
+- Do not list pronouns (I, me, you, he, she, it, we, they, ...).
+- "type" is one of: character, location, object, organization, other.
+
+Return strictly valid JSON:
+{"mentions": [{"text": "...", "type": "character"}]}
