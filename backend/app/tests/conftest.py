@@ -29,7 +29,7 @@ from app.models.world import World
 from app.pipeline.llm_client import LLMError, llm_client
 from app.services.manuscript_service import ManuscriptService
 from app.services.world_state_service import WorldStateService
-from app.workers.tasks import extraction_task
+from app.workers.tasks import extraction_task, job_update_task
 
 
 class Phase1Env:
@@ -42,8 +42,9 @@ class Phase1Env:
         self.Session = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self.monkeypatch = monkeypatch
 
-        # The worker opens its own sessions through this factory.
+        # The worker and the job rollup open their own sessions through these factories.
         monkeypatch.setattr(extraction_task, "SessionLocal", self.Session)
+        monkeypatch.setattr(job_update_task, "SessionLocal", self.Session)
         monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "storage"))
 
         self.llm_calls: List[Tuple[str, int]] = []          # (world tag, chapter number) per LLM call
