@@ -77,22 +77,6 @@ services:
       redis:
         condition: service_started
 
-  wse_api:
-    build:
-      context: ./WSE
-      dockerfile: Dockerfile
-    container_name: orion_wse_api
-    restart: unless-stopped
-    ports:
-      - "8001:8001"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/orion
-    volumes:
-      - ./WSE:/app
-    depends_on:
-      db:
-        condition: service_healthy
-
   frontend:
     build:
       context: ./Frontend
@@ -104,13 +88,11 @@ services:
     environment:
       - CHOKIDAR_USEPOLLING=true
       - VITE_API_URL=http://localhost:8000
-      - VITE_WSE_URL=http://localhost:8001
     volumes:
       - ./Frontend:/app
       - /app/node_modules
     depends_on:
       - backend_api
-      - wse_api
 
 volumes:
   postgres_data:
