@@ -9,6 +9,8 @@ from app.services.entity_service import EntityService
 from app.services.consistency_service import ConsistencyService
 from app.services.graph_service import GraphService
 from app.services.timeline_service import TimelineService
+from app.services.chapter_service import ChapterService
+from app.repositories.manuscript_repo import ManuscriptRepository
 
 @pytest.fixture
 def db_session():
@@ -104,3 +106,27 @@ def test_graph_and_timeline_services(db_session):
     timeline = timeline_service.get_world_timeline(world.id)
     assert timeline.total == 1
     assert timeline.events[0].event_type == "DISCOVERY"
+
+def test_delete_chapter_removes_empty_manuscript(db_session):
+    ws_service = WorldStateService(db_session)
+    world = ws_service.create_world("Manuscript Realm")
+
+    ms_repo = ManuscriptRepository(db_session)
+    manuscript = ms_repo.create({
+        "world_id": world.id,
+        "title": "Test Book",
+        "file_type": "text/plain"
+    })
+
+    ch_service = ChapterService(db_session)
+    ch1 = ch_service.create_chapter(manuscript.id, "Chapter 1", "Content 1")
+    ch2 = ch_service.create_chapter(manuscript.id, "Chapter 2", "Content 2")
+
+    # Delete first chapter - manuscript should still exist
+    ch_service.delete_chapter(ch1.id)
+    assert ms_repo.get(manuscript.id) is not None
+    assert len(ch_service.list_chapters(manuscript.id)) == 1
+
+    # Delete second chapter - chapter count reaches 0, so manuscript should be automatically deleted
+    ch_service.delete_chapter(ch2.id)
+    assert ms_repo.get(manuscript.id) is None

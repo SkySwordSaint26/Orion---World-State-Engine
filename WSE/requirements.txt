@@ -1,6 +1,14 @@
-fastapi==0.110.0
-uvicorn==0.27.1
-sqlalchemy==2.0.27
-psycopg2-binary==2.9.9
-pydantic==2.6.3
-python-multipart==0.0.9
+# WSE extraction pipeline v2 — Python 3.12 venv (see docs/wse_extraction_plan.md, Phase 0)
+#   python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#   .venv/bin/pip install --no-deps booknlp==1.0.8     # its declared tensorflow dependency is never imported
+#   .venv/bin/python -m spacy download en_core_web_sm
+#   NuExtract 2.0 4B for Ollama (`ollama pull hf.co/...` fails on the Hugging Face CDN redirect):
+#   ln -s "$(.venv/bin/python -c "from huggingface_hub import hf_hub_download as d; \
+#          print(d('numind/NuExtract-2.0-4B-GGUF', 'NuExtract-2.0-4B-Q4_K_M.gguf'))")" NuExtract-2.0-4B-Q4_K_M.gguf
+#   ollama create nuextract2-4b -f nuextract.Modelfile       # the GGUF's own chat template is Jinja, Ollama needs ChatML
+torch==2.14.0
+transformers==4.57.6
+gliner2[local]==2.0.0
+spacy==3.8.16
+setuptools<81          # booknlp imports pkg_resources, removed in setuptools 81
+pytest

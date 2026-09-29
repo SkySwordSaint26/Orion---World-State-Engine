@@ -1,0 +1,1646 @@
+{
+  "story_id": "accounts_from_a_lonely_broadcast_station_part_1",
+  "source_file": "Accounts From a Lonely Broadcast Station [Part 1].txt",
+  "entity_mentions": [
+    {
+      "text": "Evelyn",
+      "start_offset": 1059,
+      "end_offset": 1065,
+      "mention_id": "M001",
+      "type": "character"
+    },
+    {
+      "text": "internet",
+      "start_offset": 107,
+      "end_offset": 115,
+      "mention_id": "M002",
+      "type": "other"
+    },
+    {
+      "text": "broadcast station",
+      "start_offset": 311,
+      "end_offset": 328,
+      "mention_id": "M003",
+      "type": "location"
+    },
+    {
+      "text": "outside world",
+      "start_offset": 403,
+      "end_offset": 416,
+      "mention_id": "M004",
+      "type": "location"
+    },
+    {
+      "text": "bathroom",
+      "start_offset": 889,
+      "end_offset": 897,
+      "mention_id": "M005",
+      "type": "location"
+    },
+    {
+      "text": "WiFi",
+      "start_offset": 937,
+      "end_offset": 941,
+      "mention_id": "M006",
+      "type": "other"
+    },
+    {
+      "text": "Evelyn",
+      "start_offset": 10225,
+      "end_offset": 10231,
+      "mention_id": "M007",
+      "type": "character"
+    },
+    {
+      "text": "radio DJ",
+      "start_offset": 1207,
+      "end_offset": 1215,
+      "mention_id": "M008",
+      "type": "character"
+    },
+    {
+      "text": "broadcast station",
+      "start_offset": 1266,
+      "end_offset": 1283,
+      "mention_id": "M009",
+      "type": "location"
+    },
+    {
+      "text": "old rural town",
+      "start_offset": 1343,
+      "end_offset": 1357,
+      "mention_id": "M010",
+      "type": "location"
+    },
+    {
+      "text": "woodland",
+      "start_offset": 1389,
+      "end_offset": 1397,
+      "mention_id": "M011",
+      "type": "location"
+    },
+    {
+      "text": "the station",
+      "start_offset": 2399,
+      "end_offset": 2410,
+      "mention_id": "M012",
+      "type": "location"
+    },
+    {
+      "text": "town",
+      "start_offset": 1353,
+      "end_offset": 1357,
+      "mention_id": "M013",
+      "type": "location"
+    },
+    {
+      "text": "mountains",
+      "start_offset": 1608,
+      "end_offset": 1617,
+      "mention_id": "M014",
+      "type": "location"
+    },
+    {
+      "text": "road",
+      "start_offset": 312,
+      "end_offset": 316,
+      "mention_id": "M015",
+      "type": "location"
+    },
+    {
+      "text": "woods",
+      "start_offset": 1751,
+      "end_offset": 1756,
+      "mention_id": "M016",
+      "type": "location"
+    },
+    {
+      "text": "rest stop",
+      "start_offset": 1808,
+      "end_offset": 1817,
+      "mention_id": "M017",
+      "type": "location"
+    },
+    {
+      "text": "Evelyn",
+      "start_offset": 13378,
+      "end_offset": 13384,
+      "mention_id": "M018",
+      "type": "character"
+    },
+    {
+      "text": "station",
+      "start_offset": 321,
+      "end_offset": 328,
+      "mention_id": "M019",
+      "type": "location"
+    },
+    {
+      "text": "owners of the place",
+      "start_offset": 2144,
+      "end_offset": 2163,
+      "mention_id": "M020",
+      "type": "organization"
+    },
+    {
+      "text": "myself",
+      "start_offset": 2129,
+      "end_offset": 2135,
+      "mention_id": "M021",
+      "type": "character"
+    },
+    {
+      "text": "back room",
+      "start_offset": 2382,
+      "end_offset": 2391,
+      "mention_id": "M022",
+      "type": "location"
+    },
+    {
+      "text": "station",
+      "start_offset": 1276,
+      "end_offset": 1283,
+      "mention_id": "M023",
+      "type": "location"
+    },
+    {
+      "text": "radio",
+      "start_offset": 1207,
+      "end_offset": 1212,
+      "mention_id": "M024",
+      "type": "object"
+    },
+    {
+      "text": "automatic playlist",
+      "start_offset": 2529,
+      "end_offset": 2547,
+      "mention_id": "M025",
+      "type": "object"
+    },
+    {
+      "text": "home",
+      "start_offset": 2795,
+      "end_offset": 2799,
+      "mention_id": "M027",
+      "type": "location"
+    },
+    {
+      "text": "station",
+      "start_offset": 1539,
+      "end_offset": 1546,
+      "mention_id": "M028",
+      "type": "location"
+    },
+    {
+      "text": "weather forecast",
+      "start_offset": 3096,
+      "end_offset": 3112,
+      "mention_id": "M029",
+      "type": "other"
+    },
+    {
+      "text": "locals",
+      "start_offset": 3126,
+      "end_offset": 3132,
+      "mention_id": "M030",
+      "type": "character"
+    },
+    {
+      "text": "local news",
+      "start_offset": 3179,
+      "end_offset": 3189,
+      "mention_id": "M031",
+      "type": "other"
+    },
+    {
+      "text": "one corner store",
+      "start_offset": 3444,
+      "end_offset": 3460,
+      "mention_id": "M032",
+      "type": "location"
+    },
+    {
+      "text": "one tiny diner",
+      "start_offset": 3465,
+      "end_offset": 3479,
+      "mention_id": "M033",
+      "type": "location"
+    },
+    {
+      "text": "woods",
+      "start_offset": 3497,
+      "end_offset": 3502,
+      "mention_id": "M034",
+      "type": "location"
+    },
+    {
+      "text": "same song",
+      "start_offset": 3645,
+      "end_offset": 3654,
+      "mention_id": "M035",
+      "type": "object"
+    },
+    {
+      "text": "radio",
+      "start_offset": 2194,
+      "end_offset": 2199,
+      "mention_id": "M036",
+      "type": "object"
+    },
+    {
+      "text": "Unchained Melody",
+      "start_offset": 3855,
+      "end_offset": 3871,
+      "mention_id": "M037",
+      "type": "object"
+    },
+    {
+      "text": "station",
+      "start_offset": 2403,
+      "end_offset": 2410,
+      "mention_id": "M038",
+      "type": "location"
+    },
+    {
+      "text": "old man",
+      "start_offset": 4311,
+      "end_offset": 4318,
+      "mention_id": "M039",
+      "type": "character"
+    },
+    {
+      "text": "phone",
+      "start_offset": 4285,
+      "end_offset": 4290,
+      "mention_id": "M040",
+      "type": "object"
+    },
+    {
+      "text": "five birds",
+      "start_offset": 4695,
+      "end_offset": 4705,
+      "mention_id": "M042",
+      "type": "character"
+    },
+    {
+      "text": "window",
+      "start_offset": 4731,
+      "end_offset": 4737,
+      "mention_id": "M043",
+      "type": "object"
+    },
+    {
+      "text": "tower",
+      "start_offset": 4839,
+      "end_offset": 4844,
+      "mention_id": "M044",
+      "type": "location"
+    },
+    {
+      "text": "broadcasting room",
+      "start_offset": 5017,
+      "end_offset": 5034,
+      "mention_id": "M045",
+      "type": "location"
+    },
+    {
+      "text": "fire escape",
+      "start_offset": 5266,
+      "end_offset": 5277,
+      "mention_id": "M046",
+      "type": "location"
+    },
+    {
+      "text": "rag",
+      "start_offset": 5285,
+      "end_offset": 5288,
+      "mention_id": "M048",
+      "type": "object"
+    },
+    {
+      "text": "board",
+      "start_offset": 5377,
+      "end_offset": 5382,
+      "mention_id": "M049",
+      "type": "object"
+    },
+    {
+      "text": "desk",
+      "start_offset": 5391,
+      "end_offset": 5395,
+      "mention_id": "M050",
+      "type": "object"
+    },
+    {
+      "text": "Rule 1",
+      "start_offset": 5456,
+      "end_offset": 5462,
+      "mention_id": "M051",
+      "type": "other"
+    },
+    {
+      "text": "radio",
+      "start_offset": 2514,
+      "end_offset": 2519,
+      "mention_id": "M052",
+      "type": "object"
+    },
+    {
+      "text": "The Bell",
+      "start_offset": 5581,
+      "end_offset": 5589,
+      "mention_id": "M053",
+      "type": "object"
+    },
+    {
+      "text": "button",
+      "start_offset": 5676,
+      "end_offset": 5682,
+      "mention_id": "M054",
+      "type": "object"
+    },
+    {
+      "text": "wall",
+      "start_offset": 877,
+      "end_offset": 881,
+      "mention_id": "M055",
+      "type": "location"
+    },
+    {
+      "text": "Rule 2",
+      "start_offset": 5745,
+      "end_offset": 5751,
+      "mention_id": "M056",
+      "type": "other"
+    },
+    {
+      "text": "equipment",
+      "start_offset": 5770,
+      "end_offset": 5779,
+      "mention_id": "M057",
+      "type": "object"
+    },
+    {
+      "text": "Rule 3",
+      "start_offset": 5808,
+      "end_offset": 5814,
+      "mention_id": "M058",
+      "type": "other"
+    },
+    {
+      "text": "recording",
+      "start_offset": 5873,
+      "end_offset": 5882,
+      "mention_id": "M059",
+      "type": "object"
+    },
+    {
+      "text": "Rule 4",
+      "start_offset": 5889,
+      "end_offset": 5895,
+      "mention_id": "M060",
+      "type": "other"
+    },
+    {
+      "text": "fog",
+      "start_offset": 5906,
+      "end_offset": 5909,
+      "mention_id": "M061",
+      "type": "other"
+    },
+    {
+      "text": "building",
+      "start_offset": 5937,
+      "end_offset": 5945,
+      "mention_id": "M062",
+      "type": "location"
+    },
+    {
+      "text": "door",
+      "start_offset": 5963,
+      "end_offset": 5967,
+      "mention_id": "M063",
+      "type": "object"
+    },
+    {
+      "text": "emergency broadcast",
+      "start_offset": 5979,
+      "end_offset": 5998,
+      "mention_id": "M064",
+      "type": "other"
+    },
+    {
+      "text": "employer",
+      "start_offset": 6034,
+      "end_offset": 6042,
+      "mention_id": "M065",
+      "type": "organization"
+    },
+    {
+      "text": "station",
+      "start_offset": 4251,
+      "end_offset": 4258,
+      "mention_id": "M066",
+      "type": "location"
+    },
+    {
+      "text": "co-worker",
+      "start_offset": 6237,
+      "end_offset": 6246,
+      "mention_id": "M067",
+      "type": "character"
+    },
+    {
+      "text": "room",
+      "start_offset": 893,
+      "end_offset": 897,
+      "mention_id": "M069",
+      "type": "location"
+    },
+    {
+      "text": "woods",
+      "start_offset": 3569,
+      "end_offset": 3574,
+      "mention_id": "M070",
+      "type": "location"
+    },
+    {
+      "text": "window",
+      "start_offset": 5317,
+      "end_offset": 5323,
+      "mention_id": "M071",
+      "type": "object"
+    },
+    {
+      "text": "fire watch",
+      "start_offset": 6790,
+      "end_offset": 6800,
+      "mention_id": "M072",
+      "type": "other"
+    },
+    {
+      "text": "fog watch",
+      "start_offset": 6804,
+      "end_offset": 6813,
+      "mention_id": "M073",
+      "type": "other"
+    },
+    {
+      "text": "fog",
+      "start_offset": 6083,
+      "end_offset": 6086,
+      "mention_id": "M074",
+      "type": "other"
+    },
+    {
+      "text": "Pinehaven",
+      "start_offset": 7923,
+      "end_offset": 7932,
+      "mention_id": "M075",
+      "type": "location"
+    },
+    {
+      "text": "window",
+      "start_offset": 6621,
+      "end_offset": 6627,
+      "mention_id": "M076",
+      "type": "object"
+    },
+    {
+      "text": "forest",
+      "start_offset": 9039,
+      "end_offset": 9045,
+      "mention_id": "M077",
+      "type": "location"
+    },
+    {
+      "text": "fog",
+      "start_offset": 6348,
+      "end_offset": 6351,
+      "mention_id": "M078",
+      "type": "other"
+    },
+    {
+      "text": "station",
+      "start_offset": 6181,
+      "end_offset": 6188,
+      "mention_id": "M079",
+      "type": "location"
+    },
+    {
+      "text": "fog",
+      "start_offset": 6804,
+      "end_offset": 6807,
+      "mention_id": "M080",
+      "type": "other"
+    },
+    {
+      "text": "town",
+      "start_offset": 1570,
+      "end_offset": 1574,
+      "mention_id": "M081",
+      "type": "location"
+    },
+    {
+      "text": "microphone",
+      "start_offset": 7113,
+      "end_offset": 7123,
+      "mention_id": "M082",
+      "type": "object"
+    },
+    {
+      "text": "station",
+      "start_offset": 7817,
+      "end_offset": 7824,
+      "mention_id": "M083",
+      "type": "location"
+    },
+    {
+      "text": "fog",
+      "start_offset": 7441,
+      "end_offset": 7444,
+      "mention_id": "M084",
+      "type": "other"
+    },
+    {
+      "text": "town",
+      "start_offset": 1973,
+      "end_offset": 1977,
+      "mention_id": "M085",
+      "type": "location"
+    },
+    {
+      "text": "fog",
+      "start_offset": 7728,
+      "end_offset": 7731,
+      "mention_id": "M086",
+      "type": "other"
+    },
+    {
+      "text": "window",
+      "start_offset": 7143,
+      "end_offset": 7149,
+      "mention_id": "M087",
+      "type": "object"
+    },
+    {
+      "text": "pine trees",
+      "start_offset": 9219,
+      "end_offset": 9229,
+      "mention_id": "M088",
+      "type": "location"
+    },
+    {
+      "text": "phone",
+      "start_offset": 4520,
+      "end_offset": 4525,
+      "mention_id": "M089",
+      "type": "object"
+    },
+    {
+      "text": "my boss",
+      "start_offset": 10241,
+      "end_offset": 10248,
+      "mention_id": "M091",
+      "type": "character"
+    },
+    {
+      "text": "He",
+      "start_offset": 4338,
+      "end_offset": 4340,
+      "mention_id": "M092",
+      "type": "character"
+    },
+    {
+      "text": "Sir",
+      "start_offset": 10387,
+      "end_offset": 10390,
+      "mention_id": "M093",
+      "type": "character"
+    },
+    {
+      "text": "phone",
+      "start_offset": 7118,
+      "end_offset": 7123,
+      "mention_id": "M094",
+      "type": "object"
+    },
+    {
+      "text": "He",
+      "start_offset": 4527,
+      "end_offset": 4529,
+      "mention_id": "M095",
+      "type": "character"
+    },
+    {
+      "text": "fog",
+      "start_offset": 8032,
+      "end_offset": 8035,
+      "mention_id": "M096",
+      "type": "other"
+    },
+    {
+      "text": "treetops",
+      "start_offset": 10682,
+      "end_offset": 10690,
+      "mention_id": "M097",
+      "type": "location"
+    },
+    {
+      "text": "window",
+      "start_offset": 8192,
+      "end_offset": 8198,
+      "mention_id": "M098",
+      "type": "object"
+    },
+    {
+      "text": "fog",
+      "start_offset": 8071,
+      "end_offset": 8074,
+      "mention_id": "M099",
+      "type": "other"
+    },
+    {
+      "text": "Eagles",
+      "start_offset": 11228,
+      "end_offset": 11234,
+      "mention_id": "M100",
+      "type": "object"
+    },
+    {
+      "text": "town",
+      "start_offset": 2100,
+      "end_offset": 2104,
+      "mention_id": "M101",
+      "type": "location"
+    },
+    {
+      "text": "fog",
+      "start_offset": 8263,
+      "end_offset": 8266,
+      "mention_id": "M102",
+      "type": "other"
+    },
+    {
+      "text": "window",
+      "start_offset": 8997,
+      "end_offset": 9003,
+      "mention_id": "M103",
+      "type": "object"
+    },
+    {
+      "text": "fog",
+      "start_offset": 8673,
+      "end_offset": 8676,
+      "mention_id": "M104",
+      "type": "other"
+    },
+    {
+      "text": "woods",
+      "start_offset": 6675,
+      "end_offset": 6680,
+      "mention_id": "M105",
+      "type": "location"
+    },
+    {
+      "text": "pine trees",
+      "start_offset": 9247,
+      "end_offset": 9257,
+      "mention_id": "M106",
+      "type": "location"
+    },
+    {
+      "text": "horizon",
+      "start_offset": 7067,
+      "end_offset": 7074,
+      "mention_id": "M107",
+      "type": "location"
+    },
+    {
+      "text": "fog",
+      "start_offset": 8777,
+      "end_offset": 8780,
+      "mention_id": "M108",
+      "type": "other"
+    },
+    {
+      "text": "town",
+      "start_offset": 7755,
+      "end_offset": 7759,
+      "mention_id": "M109",
+      "type": "location"
+    },
+    {
+      "text": "strange call",
+      "start_offset": 12161,
+      "end_offset": 12173,
+      "mention_id": "M111",
+      "type": "other"
+    },
+    {
+      "text": "town",
+      "start_offset": 11286,
+      "end_offset": 11290,
+      "mention_id": "M112",
+      "type": "location"
+    },
+    {
+      "text": "music line-up",
+      "start_offset": 12315,
+      "end_offset": 12328,
+      "mention_id": "M113",
+      "type": "object"
+    },
+    {
+      "text": "bird",
+      "start_offset": 4700,
+      "end_offset": 4704,
+      "mention_id": "M114",
+      "type": "character"
+    },
+    {
+      "text": "window",
+      "start_offset": 10206,
+      "end_offset": 10212,
+      "mention_id": "M115",
+      "type": "object"
+    },
+    {
+      "text": "twenty minute music block",
+      "start_offset": 13056,
+      "end_offset": 13081,
+      "mention_id": "M117",
+      "type": "other"
+    },
+    {
+      "text": "local news",
+      "start_offset": 13129,
+      "end_offset": 13139,
+      "mention_id": "M118",
+      "type": "other"
+    },
+    {
+      "text": "rest stop",
+      "start_offset": 13265,
+      "end_offset": 13274,
+      "mention_id": "M119",
+      "type": "location"
+    },
+    {
+      "text": "104.6 F.M.",
+      "start_offset": 13390,
+      "end_offset": 13400,
+      "mention_id": "M121",
+      "type": "other"
+    }
+  ],
+  "coreference_clusters": [
+    {
+      "cluster_id": "C001",
+      "mentions": [
+        "M001",
+        "M007",
+        "M018",
+        "M026",
+        "M041",
+        "M047",
+        "M068",
+        "M090",
+        "M110",
+        "M116",
+        "M120"
+      ]
+    },
+    {
+      "cluster_id": "C002",
+      "mentions": [
+        "M003",
+        "M009",
+        "M012",
+        "M019",
+        "M023",
+        "M028",
+        "M038",
+        "M066",
+        "M079",
+        "M083"
+      ]
+    },
+    {
+      "cluster_id": "C003",
+      "mentions": [
+        "M010",
+        "M013",
+        "M081",
+        "M085",
+        "M101",
+        "M109",
+        "M112"
+      ]
+    },
+    {
+      "cluster_id": "C004",
+      "mentions": [
+        "M016",
+        "M034",
+        "M070",
+        "M105"
+      ]
+    },
+    {
+      "cluster_id": "C005",
+      "mentions": [
+        "M017",
+        "M119"
+      ]
+    },
+    {
+      "cluster_id": "C006",
+      "mentions": [
+        "M044"
+      ]
+    },
+    {
+      "cluster_id": "C007",
+      "mentions": [
+        "M045"
+      ]
+    },
+    {
+      "cluster_id": "C008",
+      "mentions": [
+        "M043",
+        "M071",
+        "M076",
+        "M087",
+        "M098",
+        "M103",
+        "M115"
+      ]
+    },
+    {
+      "cluster_id": "C009",
+      "mentions": [
+        "M052",
+        "M024"
+      ]
+    },
+    {
+      "cluster_id": "C010",
+      "mentions": [
+        "M040",
+        "M089",
+        "M094"
+      ]
+    },
+    {
+      "cluster_id": "C011",
+      "mentions": [
+        "M061",
+        "M074",
+        "M078",
+        "M080",
+        "M084",
+        "M086",
+        "M096",
+        "M099",
+        "M102",
+        "M104",
+        "M108"
+      ]
+    },
+    {
+      "cluster_id": "C012",
+      "mentions": [
+        "M088",
+        "M106"
+      ]
+    },
+    {
+      "cluster_id": "C013",
+      "mentions": [
+        "M092",
+        "M095"
+      ]
+    },
+    {
+      "cluster_id": "C014",
+      "mentions": [
+        "M091",
+        "M093"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "event_id": "E001",
+      "type": "OTHER",
+      "trigger": {
+        "text": "started",
+        "start_offset": 12,
+        "end_offset": 19
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        }
+      ]
+    },
+    {
+      "event_id": "E002",
+      "type": "OTHER",
+      "trigger": {
+        "text": "apply",
+        "start_offset": 1195,
+        "end_offset": 1200
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        }
+      ]
+    },
+    {
+      "event_id": "E003",
+      "type": "TRAVEL",
+      "trigger": {
+        "text": "passed",
+        "start_offset": 1696,
+        "end_offset": 1702
+      },
+      "participants": [
+        {
+          "role": "participant",
+          "mention_id": "M015"
+        },
+        {
+          "role": "location",
+          "mention_id": "M016"
+        }
+      ]
+    },
+    {
+      "event_id": "E004",
+      "type": "OTHER",
+      "trigger": {
+        "text": "received",
+        "start_offset": 2371,
+        "end_offset": 2379
+      },
+      "participants": [
+        {
+          "role": "recipient",
+          "mention_id": "M001"
+        },
+        {
+          "role": "patient",
+          "mention_id": "M022"
+        }
+      ]
+    },
+    {
+      "event_id": "E005",
+      "type": "OTHER",
+      "trigger": {
+        "text": "wake",
+        "start_offset": 2609,
+        "end_offset": 2613
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        }
+      ]
+    },
+    {
+      "event_id": "E006",
+      "type": "OTHER",
+      "trigger": {
+        "text": "forget",
+        "start_offset": 3244,
+        "end_offset": 3250
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        }
+      ]
+    },
+    {
+      "event_id": "E007",
+      "type": "OTHER",
+      "trigger": {
+        "text": "lost",
+        "start_offset": 2787,
+        "end_offset": 2791
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        },
+        {
+          "role": "patient",
+          "mention_id": "M027"
+        }
+      ]
+    },
+    {
+      "event_id": "E008",
+      "type": "OTHER",
+      "trigger": {
+        "text": "played",
+        "start_offset": 3655,
+        "end_offset": 3661
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        },
+        {
+          "role": "patient",
+          "mention_id": "M024"
+        }
+      ]
+    },
+    {
+      "event_id": "E009",
+      "type": "OTHER",
+      "trigger": {
+        "text": "repeat",
+        "start_offset": 3709,
+        "end_offset": 3715
+      },
+      "participants": [
+        {
+          "role": "patient",
+          "mention_id": "M035"
+        }
+      ]
+    },
+    {
+      "event_id": "E010",
+      "type": "CONVERSATION",
+      "trigger": {
+        "text": "call",
+        "start_offset": 4194,
+        "end_offset": 4198
+      },
+      "participants": [
+        {
+          "role": "participant",
+          "mention_id": "M001"
+        },
+        {
+          "role": "participant",
+          "mention_id": "M039"
+        }
+      ]
+    },
+    {
+      "event_id": "E011",
+      "type": "CONVERSATION",
+      "trigger": {
+        "text": "croaked",
+        "start_offset": 4348,
+        "end_offset": 4355
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M039"
+        }
+      ]
+    },
+    {
+      "event_id": "E012",
+      "type": "CONVERSATION",
+      "trigger": {
+        "text": "Thank you",
+        "start_offset": 4358,
+        "end_offset": 4367
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M039"
+        }
+      ]
+    },
+    {
+      "event_id": "E013",
+      "type": "OTHER",
+      "trigger": {
+        "text": "smacked",
+        "start_offset": 4760,
+        "end_offset": 4767
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M042"
+        },
+        {
+          "role": "patient",
+          "mention_id": "M043"
+        }
+      ]
+    },
+    {
+      "event_id": "E014",
+      "type": "DEATH",
+      "trigger": {
+        "text": "die",
+        "start_offset": 5070,
+        "end_offset": 5073
+      },
+      "participants": [
+        {
+          "role": "patient",
+          "mention_id": "M042"
+        }
+      ]
+    },
+    {
+      "event_id": "E015",
+      "type": "OTHER",
+      "trigger": {
+        "text": "climbed",
+        "start_offset": 5247,
+        "end_offset": 5254
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        },
+        {
+          "role": "location",
+          "mention_id": "M046"
+        }
+      ]
+    },
+    {
+      "event_id": "E016",
+      "type": "ARRIVAL",
+      "trigger": {
+        "text": "coming",
+        "start_offset": 7174,
+        "end_offset": 7180
+      },
+      "participants": [
+        {
+          "role": "participant",
+          "mention_id": "M074"
+        },
+        {
+          "role": "location",
+          "mention_id": "M081"
+        }
+      ]
+    },
+    {
+      "event_id": "E017",
+      "type": "OTHER",
+      "trigger": {
+        "text": "returned",
+        "start_offset": 7802,
+        "end_offset": 7810
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        },
+        {
+          "role": "location",
+          "mention_id": "M045"
+        }
+      ]
+    },
+    {
+      "event_id": "E018",
+      "type": "OTHER",
+      "trigger": {
+        "text": "killing",
+        "start_offset": 7826,
+        "end_offset": 7833
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        },
+        {
+          "role": "patient",
+          "mention_id": "M082"
+        }
+      ]
+    },
+    {
+      "event_id": "E019",
+      "type": "CONVERSATION",
+      "trigger": {
+        "text": "speaking",
+        "start_offset": 7941,
+        "end_offset": 7949
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        }
+      ]
+    },
+    {
+      "event_id": "E021",
+      "type": "OTHER",
+      "trigger": {
+        "text": "curling",
+        "start_offset": 8834,
+        "end_offset": 8841
+      },
+      "participants": [
+        {
+          "role": "participant",
+          "mention_id": "M086"
+        },
+        {
+          "role": "location",
+          "mention_id": "M079"
+        }
+      ]
+    },
+    {
+      "event_id": "E022",
+      "type": "OTHER",
+      "trigger": {
+        "text": "moving",
+        "start_offset": 7325,
+        "end_offset": 7331
+      },
+      "participants": [
+        {
+          "role": "participant",
+          "mention_id": "M088"
+        }
+      ]
+    },
+    {
+      "event_id": "E023",
+      "type": "CONVERSATION",
+      "trigger": {
+        "text": "rang",
+        "start_offset": 10099,
+        "end_offset": 10103
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M089"
+        }
+      ]
+    },
+    {
+      "event_id": "E024",
+      "type": "CONVERSATION",
+      "trigger": {
+        "text": "Turn",
+        "start_offset": 10355,
+        "end_offset": 10359
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M091"
+        }
+      ]
+    },
+    {
+      "event_id": "E025",
+      "type": "CONVERSATION",
+      "trigger": {
+        "text": "turn",
+        "start_offset": 7098,
+        "end_offset": 7102
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        }
+      ]
+    },
+    {
+      "event_id": "E026",
+      "type": "CONVERSATION",
+      "trigger": {
+        "text": "hung up",
+        "start_offset": 4530,
+        "end_offset": 4537
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M095"
+        }
+      ]
+    },
+    {
+      "event_id": "E027",
+      "type": "OTHER",
+      "trigger": {
+        "text": "disappeared",
+        "start_offset": 10710,
+        "end_offset": 10721
+      },
+      "participants": [
+        {
+          "role": "participant",
+          "mention_id": "M097"
+        }
+      ]
+    },
+    {
+      "event_id": "E028",
+      "type": "OTHER",
+      "trigger": {
+        "text": "covered",
+        "start_offset": 1600,
+        "end_offset": 1607
+      },
+      "participants": [
+        {
+          "role": "patient",
+          "mention_id": "M098"
+        }
+      ]
+    },
+    {
+      "event_id": "E029",
+      "type": "OTHER",
+      "trigger": {
+        "text": "slammed",
+        "start_offset": 11064,
+        "end_offset": 11071
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        },
+        {
+          "role": "location",
+          "mention_id": "M079"
+        }
+      ]
+    },
+    {
+      "event_id": "E030",
+      "type": "OTHER",
+      "trigger": {
+        "text": "playing",
+        "start_offset": 3069,
+        "end_offset": 3076
+      },
+      "participants": [
+        {
+          "role": "patient",
+          "mention_id": "M100"
+        }
+      ]
+    },
+    {
+      "event_id": "E031",
+      "type": "OTHER",
+      "trigger": {
+        "text": "sank",
+        "start_offset": 11686,
+        "end_offset": 11690
+      },
+      "participants": [
+        {
+          "role": "participant",
+          "mention_id": "M104"
+        }
+      ]
+    },
+    {
+      "event_id": "E032",
+      "type": "OTHER",
+      "trigger": {
+        "text": "dissipated",
+        "start_offset": 11864,
+        "end_offset": 11874
+      },
+      "participants": [
+        {
+          "role": "participant",
+          "mention_id": "M108"
+        }
+      ]
+    },
+    {
+      "event_id": "E033",
+      "type": "CONVERSATION",
+      "trigger": {
+        "text": "saying",
+        "start_offset": 12236,
+        "end_offset": 12242
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M111"
+        }
+      ]
+    },
+    {
+      "event_id": "E034",
+      "type": "OTHER",
+      "trigger": {
+        "text": "play",
+        "start_offset": 2041,
+        "end_offset": 2045
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        },
+        {
+          "role": "patient",
+          "mention_id": "M113"
+        }
+      ]
+    },
+    {
+      "event_id": "E035",
+      "type": "OTHER",
+      "trigger": {
+        "text": "heard",
+        "start_offset": 1875,
+        "end_offset": 1880
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        }
+      ]
+    },
+    {
+      "event_id": "E036",
+      "type": "OTHER",
+      "trigger": {
+        "text": "talking",
+        "start_offset": 3156,
+        "end_offset": 3163
+      },
+      "participants": [
+        {
+          "role": "participant",
+          "mention_id": "M114"
+        }
+      ]
+    },
+    {
+      "event_id": "E037",
+      "type": "OTHER",
+      "trigger": {
+        "text": "saw",
+        "start_offset": 6455,
+        "end_offset": 6458
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M001"
+        },
+        {
+          "role": "patient",
+          "mention_id": "M114"
+        }
+      ]
+    },
+    {
+      "event_id": "E038",
+      "type": "OTHER",
+      "trigger": {
+        "text": "perch",
+        "start_offset": 12499,
+        "end_offset": 12504
+      },
+      "participants": [
+        {
+          "role": "agent",
+          "mention_id": "M114"
+        },
+        {
+          "role": "location",
+          "mention_id": "M115"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "relationship_id": "R001",
+      "subject_mention_id": "M001",
+      "predicate": "WORKS_FOR",
+      "object_mention_id": "M091"
+    }
+  ],
+  "facts": [
+    {
+      "fact_id": "F001",
+      "entity_mention_id": "M001",
+      "property": "age",
+      "value": "twenty four"
+    },
+    {
+      "fact_id": "F002",
+      "entity_mention_id": "M001",
+      "property": "occupation",
+      "value": "radio DJ"
+    },
+    {
+      "fact_id": "F003",
+      "entity_mention_id": "M001",
+      "property": "location",
+      "value": "the station"
+    }
+  ],
+  "temporal": [
+    {
+      "temporal_id": "T002",
+      "expression": "Last week",
+      "start_offset": 3630,
+      "end_offset": 3639
+    },
+    {
+      "temporal_id": "T004",
+      "expression": "At midnight",
+      "start_offset": 2497,
+      "end_offset": 2508
+    },
+    {
+      "temporal_id": "T005",
+      "expression": "six hours",
+      "start_offset": 2552,
+      "end_offset": 2561
+    },
+    {
+      "temporal_id": "T006",
+      "expression": "On my second day of work",
+      "start_offset": 6475,
+      "end_offset": 6499
+    },
+    {
+      "temporal_id": "T007",
+      "expression": "minutes apart from one another",
+      "start_offset": 4944,
+      "end_offset": 4974
+    },
+    {
+      "temporal_id": "T008",
+      "expression": "Within moments",
+      "start_offset": 11166,
+      "end_offset": 11180
+    },
+    {
+      "temporal_id": "T009",
+      "expression": "In moments",
+      "start_offset": 11667,
+      "end_offset": 11677
+    },
+    {
+      "temporal_id": "T010",
+      "expression": "Yesterday",
+      "start_offset": 12476,
+      "end_offset": 12485
+    },
+    {
+      "temporal_id": "T011",
+      "expression": "in the following days and weeks",
+      "start_offset": 12821,
+      "end_offset": 12852
+    }
+  ],
+  "temporal_relations": [],
+  "review_notes": [
+    "The old man's identity is not established; no name or unsupported identity is assigned.",
+    "The boss is represented by the explicit nominal mention 'my boss'; 'He' and 'Sir' are coreferred with that mention.",
+    "The fog's apparent agency is described by Evelyn, but its ontology is not established; it is typed as OTHER rather than a new entity type.",
+    "The five birds are treated as character entities because they are individualized participants that perform an action and die.",
+    "No FRIEND_OF or ENEMY_OF relationship is inferred from interactions, strange calls, birds, or the fog.",
+    "The station's physical location in Pinehaven is not asserted as a permanent fact merely from the emergency broadcast addressed to Pinehaven.",
+    "Some occurrences are represented as OTHER because Orion v1 requires a controlled event type and the text does not support a more specific category.",
+    "No world-state contradiction resolution, confidence score, or final database entity IDs are included; those belong downstream."
+  ]
+}

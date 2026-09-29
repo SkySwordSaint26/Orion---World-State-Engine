@@ -21,15 +21,27 @@ class BaseRepository(Generic[ModelType]):
     def first_by(self, **kwargs) -> Optional[ModelType]:
         return self.db.query(self.model).filter_by(**kwargs).first()
 
-    def create(self, obj_in: Union[Dict[str, Any], ModelType]) -> ModelType:
+    def _persist(self, obj: Any, commit: bool = True) -> Any:
+        """
+        Adds obj to the session. With commit=True (default, legacy behaviour) the transaction is
+        committed. With commit=False the row is only flushed, which assigns generated IDs and
+        defaults while leaving the transaction open for the caller (e.g. an atomic chapter
+        integration) to commit or roll back.
+        """
+        self.db.add(obj)
+        if commit:
+            self.db.commit()
+            self.db.refresh(obj)
+        else:
+            self.db.flush()
+        return obj
+
+    def create(self, obj_in: Union[Dict[str, Any], ModelType], commit: bool = True) -> ModelType:
         if isinstance(obj_in, dict):
             db_obj = self.model(**obj_in)
         else:
             db_obj = obj_in
-        self.db.add(db_obj)
-        self.db.commit()
-        self.db.refresh(db_obj)
-        return db_obj
+        return self._persist(db_obj, commit)
 
     def update(
         self,

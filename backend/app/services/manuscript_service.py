@@ -41,7 +41,20 @@ class ManuscriptService:
         """
         # Save physical file
         saved_path = save_file_content(file_bytes, filename, subfolder=f"worlds/{world_id}")
-        content_text = file_bytes.decode("utf-8", errors="replace")
+        
+        lower_filename = filename.lower()
+        if lower_filename.endswith(".docx"):
+            import io
+            from docx import Document
+            doc = Document(io.BytesIO(file_bytes))
+            content_text = "\n".join([p.text for p in doc.paragraphs])
+        elif lower_filename.endswith(".pdf"):
+            import io
+            import PyPDF2
+            reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
+            content_text = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
+        else:
+            content_text = file_bytes.decode("utf-8", errors="replace")
 
         # 1. Create Manuscript record
         manuscript = self.manuscript_repo.create({

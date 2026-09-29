@@ -39,7 +39,7 @@ At its core, the World State Engine bridges two fundamentally different computin
    - LLM answers are stochastic; re-running the check can give conflicting results.
    - LLMs suffer from recency and confirmation bias.
    - LLM calls are expensive and slow (latency budget: consistency detection must complete in ≤ 5 seconds per SRS 5.1).
-   - In contrast, algorithmic Python code (age monotonicity, geographic overlaps, death state violations, temporal cycle DFS) is deterministic, sub-millisecond, unit-testable, and provable.
+   - In contrast, algorithmic Python code (age monotonicity, dead-then-alive status, incompatible relationships, temporal cycle DFS; geographic-overlap and acting-after-death rules are deferred, see `context/consistency_engine.md`) is deterministic, sub-millisecond, unit-testable, and provable.
 
 ---
 

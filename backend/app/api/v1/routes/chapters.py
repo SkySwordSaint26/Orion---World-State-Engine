@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user_world
 from app.models.world import World
-from app.schemas.chapter import ChapterResponse, ChapterUpdate, ChapterVersionResponse
+from app.schemas.chapter import ChapterResponse, ChapterUpdate, ChapterVersionResponse, ChapterCreate
 from app.services.chapter_service import ChapterService
-from app.workers.tasks.extraction_task import execute_chapter_extraction
+from app.workers.dispatch import dispatch_extraction_job, ExtractionDispatchError
 
 router = APIRouter()
 
@@ -103,16 +103,10 @@ def update_chapter_content(
             user_id=world.user_id
         )
 
-        background_tasks.add_task(
-            execute_chapter_extraction,
-            world_id=world.id,
-            job_id=job.id,
-            extraction_run_id=run.id,
-            chapter_id=chapter.id,
-            chapter_version_id=version.id,
-            chapter_text=chapter_in.content,
-            chapter_number=chapter.chapter_number
-        )
+        try:
+            dispatch_extraction_job(job.id, background_tasks)
+        except ExtractionDispatchError as e:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
 
         return {
             "chapter_id": chapter.id,
@@ -122,3 +116,62 @@ def update_chapter_content(
         }
 
     return {"chapter_id": chapter.id, "message": "Chapter updated"}
+
+@router.post("/{world_id}/manuscripts/{manuscript_id}/chapters", response_model=ChapterResponse, status_code=status.HTTP_201_CREATED)
+def create_chapter(
+    world_id: str,
+    manuscript_id: str,
+    chapter_in: ChapterCreate,
+    world: World = Depends(get_current_user_world),
+    db: Session = Depends(get_db)
+):
+    service = ChapterService(db)
+    chapter = service.create_chapter(manuscript_id, chapter_in.title, chapter_in.content or "")
+    return ChapterResponse(
+        id=chapter.id,
+        manuscript_id=chapter.manuscript_id,
+        chapter_number=chapter.chapter_number,
+        title=chapter.title,
+        created_at=chapter.created_at,
+        updated_at=chapter.updated_at
+    )
+
+@router.delete("/{world_id}/chapters/{chapter_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_chapter(
+    world_id: str,
+    chapter_id: str,
+    world: World = Depends(get_current_user_world),
+    db: Session = Depends(get_db)
+):
+    service = ChapterService(db)
+    chapter = service.get_chapter(chapter_id)
+    if not chapter or not chapter.manuscript or chapter.manuscript.world_id != world.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found")
+        
+    service.delete_chapter(chapter_id)
+    return None
+
+@router.get("/{world_id}/chapters/{chapter_id}/versions", response_model=List[ChapterVersionResponse])
+def list_chapter_versions(
+    world_id: str,
+    chapter_id: str,
+    world: World = Depends(get_current_user_world),
+    db: Session = Depends(get_db)
+):
+    service = ChapterService(db)
+    chapter = service.get_chapter(chapter_id)
+    if not chapter or not chapter.manuscript or chapter.manuscript.world_id != world.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found")
+        
+    versions = service.get_chapter_versions(chapter_id)
+    return [
+        ChapterVersionResponse(
+            id=v.id,
+            chapter_id=v.chapter_id,
+            version_number=v.version_number,
+            is_current=v.is_current,
+            content_path=v.content_path,
+            content_hash=v.content_hash,
+            created_at=v.created_at
+        ) for v in versions
+    ]

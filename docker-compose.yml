@@ -34,6 +34,7 @@ services:
       dockerfile: Dockerfile
     container_name: orion_backend_api
     restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     environment:
@@ -42,6 +43,7 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - ENVIRONMENT=development
+      - EXTRACTION_EXECUTOR=celery
       - STORAGE_DIR=/backend/storage
     volumes:
       - ./backend/app:/backend/app
@@ -75,22 +77,6 @@ services:
       redis:
         condition: service_started
 
-  wse_api:
-    build:
-      context: ./WSE
-      dockerfile: Dockerfile
-    container_name: orion_wse_api
-    restart: unless-stopped
-    ports:
-      - "8001:8001"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/orion
-    volumes:
-      - ./WSE:/app
-    depends_on:
-      db:
-        condition: service_healthy
-
   frontend:
     build:
       context: ./Frontend
@@ -102,13 +88,11 @@ services:
     environment:
       - CHOKIDAR_USEPOLLING=true
       - VITE_API_URL=http://localhost:8000
-      - VITE_WSE_URL=http://localhost:8001
     volumes:
       - ./Frontend:/app
       - /app/node_modules
     depends_on:
       - backend_api
-      - wse_api
 
 volumes:
   postgres_data:

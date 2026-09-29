@@ -9,6 +9,14 @@ from app.config.logging import get_logger
 
 logger = get_logger(__name__)
 
+class LLMError(RuntimeError):
+    """Raised when the configured LLM provider cannot produce a response."""
+
+
+class LLMConfigurationError(LLMError):
+    """Raised when LLM_PROVIDER is missing required configuration or is unknown."""
+
+
 class LLMClient:
     def __init__(self):
         self.provider = settings.LLM_PROVIDER.lower()
@@ -16,29 +24,56 @@ class LLMClient:
         self.ollama_model = settings.OLLAMA_MODEL
         self.openai_key = settings.OPENAI_API_KEY
         self.openai_model = settings.OPENAI_MODEL
+        if self.provider == "mock":
+            logger.warning(
+                "LLM_PROVIDER=mock: extraction will use the offline HEURISTIC MOCK engine. "
+                "Output is NOT produced by a language model and must not be used with real world data."
+            )
 
     def generate(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
         json_mode: bool = True,
-        temperature: float = 0.0
+        temperature: float = 0.0,
+        schema: Optional[Dict[str, Any]] = None
     ) -> str:
-        """Dispatches generation request to configured provider with automatic fallback."""
-        if self.provider == "openai" and self.openai_key:
-            try:
-                return self._call_openai(prompt, system_prompt, json_mode, temperature)
-            except Exception as e:
-                logger.warning(f"OpenAI call failed, attempting fallback: {e}")
+        """
+        Dispatches a generation request to the configured provider.
 
-        if self.provider == "ollama" or (self.provider != "mock" and not self.openai_key):
-            try:
-                return self._call_ollama(prompt, system_prompt, json_mode, temperature)
-            except Exception as e:
-                logger.warning(f"Ollama call failed ({e}), using mock engine for development.")
-                return self._mock_extraction(prompt)
+        There is no automatic fallback between providers. A provider failure raises
+        LLMError so the calling extraction run fails instead of writing fabricated data.
+        The mock engine is used only when LLM_PROVIDER=mock is set explicitly.
 
-        return self._mock_extraction(prompt)
+        `schema` (JSON schema) constrains Ollama's output at generation time; other providers ignore it,
+        so callers must still validate the output.
+        """
+        provider = self.provider
+
+        if provider == "mock":
+            logger.warning("LLM_PROVIDER=mock: returning heuristic MOCK extraction (not a real LLM response).")
+            return self._mock_extraction(prompt)
+
+        if provider == "openai":
+            if not self.openai_key:
+                raise LLMConfigurationError("LLM_PROVIDER=openai but OPENAI_API_KEY is not set.")
+            try:
+                output = self._call_openai(prompt, system_prompt, json_mode, temperature)
+            except Exception as e:
+                raise LLMError(f"OpenAI request failed: {e}") from e
+        elif provider == "ollama":
+            try:
+                output = self._call_ollama(prompt, system_prompt, json_mode, temperature, schema)
+            except Exception as e:
+                raise LLMError(f"Ollama request failed: {e}") from e
+        else:
+            raise LLMConfigurationError(
+                f"Unknown LLM_PROVIDER '{provider}'. Expected 'ollama', 'openai' or 'mock'."
+            )
+
+        if not output or not output.strip():
+            raise LLMError(f"{provider} returned an empty response.")
+        return output
 
     def chat(
         self,
@@ -77,7 +112,8 @@ class LLMClient:
         prompt: str,
         system_prompt: Optional[str],
         json_mode: bool,
-        temperature: float
+        temperature: float,
+        schema: Optional[Dict[str, Any]] = None
     ) -> str:
         messages = []
         if system_prompt:
@@ -88,10 +124,11 @@ class LLMClient:
             "model": self.ollama_model,
             "messages": messages,
             "stream": False,
-            "options": {"temperature": temperature}
+            "options": {"temperature": temperature, "num_ctx": settings.OLLAMA_NUM_CTX,
+                        "num_predict": settings.OLLAMA_NUM_PREDICT}
         }
         if json_mode:
-            payload["format"] = "json"
+            payload["format"] = schema or "json"
 
         with httpx.Client(timeout=180.0) as client:
             resp = client.post(self.ollama_url, json=payload)

@@ -3,65 +3,44 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { useWorldStore } from '../store/useWorldStore';
 import { apiFetch } from '../api/client';
-import type { Manuscript } from '../data/mockData';
 
 export const Manuscripts: React.FC = () => {
   const navigate = useNavigate();
   const { worldId } = useParams<{ worldId: string }>();
-  const { manuscripts, setActiveManuscript, setActiveChapter } = useWorldStore();
+  const { 
+    manuscripts, 
+    setActiveManuscript, 
+    setActiveChapter,
+    fetchManuscriptsForWorld,
+    deleteChapter
+  } = useWorldStore();
 
   const [expandedManuscriptId, setExpandedManuscriptId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [localManuscripts, setLocalManuscripts] = useState<Manuscript[]>([]);
-
-  const fetchManuscripts = async () => {
-    if (!worldId) return;
-    setLoading(true);
-    try {
-      const data = await apiFetch<any[]>(`/worlds/${worldId}/manuscripts`);
-      const mapped: Manuscript[] = await Promise.all(
-        data.map(async (m: any) => {
-          // Fetch chapters detail for each manuscript
-          let chapters = [];
-          try {
-            const detail = await apiFetch<any>(`/worlds/${worldId}/manuscripts/${m.id}`);
-            chapters = (detail.chapters || []).map((ch: any) => ({
-              id: ch.id,
-              number: ch.chapter_number,
-              title: ch.title,
-              content: ch.content || '',
-              wordCount: ch.word_count || 1200
-            }));
-          } catch (_) {}
-
-          return {
-            id: m.id,
-            title: m.title,
-            chapters
-          };
-        })
-      );
-
-      if (mapped.length > 0) {
-        setLocalManuscripts(mapped);
-        setExpandedManuscriptId(mapped[0].id);
-      } else {
-        setLocalManuscripts(manuscripts); // fallback mock if empty
-        if (manuscripts.length > 0) {
-          setExpandedManuscriptId(manuscripts[0].id);
-        }
-      }
-    } catch (err) {
-      console.warn("Failed to fetch manuscripts via API, using fallback store", err);
-      setLocalManuscripts(manuscripts);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadToast, setUploadToast] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{manuscriptId: string, chapterId: string} | null>(null);
 
   useEffect(() => {
-    fetchManuscripts();
-  }, [worldId]);
+    if (worldId) {
+      if (manuscripts.length === 0) {
+        setLoading(true);
+      }
+      fetchManuscriptsForWorld(worldId).finally(() => setLoading(false));
+    }
+  }, [worldId, fetchManuscriptsForWorld]);
+
+  const displayedList = manuscripts.filter(m => m.chapters.length > 0);
+
+  useEffect(() => {
+    if (displayedList.length > 0) {
+      if (!expandedManuscriptId || !displayedList.some(m => m.id === expandedManuscriptId)) {
+        setExpandedManuscriptId(displayedList[0].id);
+      }
+    } else {
+      setExpandedManuscriptId(null);
+    }
+  }, [displayedList, expandedManuscriptId]);
 
   const handleToggleManuscript = (id: string) => {
     setExpandedManuscriptId(expandedManuscriptId === id ? null : id);
@@ -74,12 +53,14 @@ export const Manuscripts: React.FC = () => {
   };
 
   const handleAddManuscript = async () => {
+    if (isUploading) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.txt,.pdf,.docx,.epub';
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file && worldId) {
+        setIsUploading(true);
         const formData = new FormData();
         formData.append('file', file);
         try {
@@ -87,18 +68,50 @@ export const Manuscripts: React.FC = () => {
             method: 'POST',
             body: formData,
           });
-          if (res.job_id) {
-            navigate(`/worlds/${worldId}/processing?jobId=${res.job_id}`);
+          const fresh = await fetchManuscriptsForWorld(worldId);
+          if (res.manuscript_id) {
+            setExpandedManuscriptId(res.manuscript_id);
+          } else if (fresh.length > 0) {
+            setExpandedManuscriptId(fresh[fresh.length - 1].id);
           }
+          setUploadToast(`"${file.name}" uploaded successfully. Chapters are ready!`);
+          setTimeout(() => {
+            setUploadToast(null);
+          }, 5000);
         } catch (err: any) {
           alert(err.message || "Upload failed");
+        } finally {
+          setIsUploading(false);
         }
       }
     };
     input.click();
   };
 
-  const displayedList = localManuscripts.length > 0 ? localManuscripts : manuscripts;
+  const handleDeleteChapter = (e: React.MouseEvent, manuscriptId: string, chapterId: string) => {
+    e.stopPropagation();
+    setDeleteConfirm({ manuscriptId, chapterId });
+  };
+
+  const executeDeleteChapter = async () => {
+    if (!deleteConfirm) return;
+    const { manuscriptId, chapterId } = deleteConfirm;
+    
+    if (worldId && !worldId.startsWith('terra-')) {
+      try {
+        await apiFetch(`/worlds/${worldId}/chapters/${chapterId}`, {
+          method: 'DELETE'
+        });
+      } catch (err: any) {
+        alert('Failed to delete chapter: ' + err.message);
+        setDeleteConfirm(null);
+        return;
+      }
+    }
+
+    deleteChapter(manuscriptId, chapterId);
+    setDeleteConfirm(null);
+  };
 
   return (
     <AppShell>
@@ -120,10 +133,13 @@ export const Manuscripts: React.FC = () => {
             <div className="flex items-center gap-4 shrink-0">
               <button 
                 onClick={handleAddManuscript}
-                className="flex items-center gap-2 font-label-sm text-xs text-copper-glow border border-copper-glow/50 rounded px-5 py-2.5 hover:bg-copper-glow hover:text-void-black transition-all uppercase tracking-wider font-semibold shadow-lg hover:shadow-primary/10"
+                disabled={isUploading}
+                className="flex items-center gap-2 font-label-sm text-xs text-copper-glow border border-copper-glow/50 rounded px-5 py-2.5 hover:bg-copper-glow hover:text-void-black transition-all uppercase tracking-wider font-semibold shadow-lg hover:shadow-primary/10 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="material-symbols-outlined text-sm font-light">add</span>
-                Upload Manuscript
+                <span className={`material-symbols-outlined text-sm font-light ${isUploading ? 'animate-spin' : ''}`}>
+                  {isUploading ? 'refresh' : 'add'}
+                </span>
+                {isUploading ? 'Uploading...' : 'Upload Manuscript'}
               </button>
             </div>
           </div>
@@ -132,6 +148,12 @@ export const Manuscripts: React.FC = () => {
             <div className="py-20 text-center text-sm text-copper-glow flex items-center justify-center gap-2">
               <span className="material-symbols-outlined animate-spin">refresh</span>
               <span>Loading manuscripts archive...</span>
+            </div>
+          ) : displayedList.length === 0 ? (
+            <div className="py-20 text-center text-on-surface-variant/60 flex flex-col items-center justify-center gap-3 border border-dashed border-starlight-white/10 rounded-xl p-8">
+              <span className="material-symbols-outlined text-4xl text-on-surface-variant/30 font-light">menu_book</span>
+              <p className="font-body-md text-sm text-on-surface-variant/70">No manuscripts in archive.</p>
+              <p className="font-label-sm text-xs text-on-surface-variant/40">Upload a manuscript text file to extract chapters and begin building your world ledger.</p>
             </div>
           ) : (
             /* Tree list */
@@ -195,6 +217,13 @@ export const Manuscripts: React.FC = () => {
                                 <span className="w-1 h-1 rounded-full bg-current"></span>
                                 Extracted
                               </div>
+                              <button 
+                                onClick={(e) => handleDeleteChapter(e, ms.id, ch.id)}
+                                className="text-on-surface-variant/30 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 p-1"
+                                title="Delete Chapter"
+                              >
+                                <span className="material-symbols-outlined text-sm">delete</span>
+                              </button>
                               <span className="material-symbols-outlined text-sm text-on-surface-variant/30 group-hover:text-primary transition-colors">edit</span>
                             </div>
                           </div>
@@ -209,6 +238,45 @@ export const Manuscripts: React.FC = () => {
 
         </div>
       </main>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void-black/80 backdrop-blur-sm">
+          <div className="bg-surface-container-high border border-primary/30 rounded-xl shadow-[0_8px_32px_rgba(235,166,134,0.15)] max-w-md w-full p-6 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="font-headline-sm text-starlight-white flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">warning</span>
+              Delete Chapter
+            </h3>
+            <p className="text-on-surface-variant text-sm leading-relaxed">
+              Are you sure you want to delete this chapter? This action cannot be undone and will permanently remove its content.
+            </p>
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 rounded-lg font-label-sm text-sm text-starlight-white/70 hover:text-starlight-white hover:bg-surface-container-highest transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeDeleteChapter}
+                className="px-4 py-2 rounded-lg font-label-sm text-sm bg-primary/20 text-primary border border-primary/50 hover:bg-primary hover:text-void-black transition-colors shadow-md"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Toast */}
+      <div 
+        className={`fixed bottom-8 right-8 z-50 flex items-center gap-3 px-5 py-3 rounded-xl bg-surface-container-high/90 backdrop-blur-md border border-primary/30 shadow-[0_8px_32px_rgba(235,166,134,0.15)] transition-all duration-500 transform ${
+          uploadToast ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'
+        }`}
+      >
+        <span className="material-symbols-outlined text-primary text-xl">check_circle</span>
+        <span className="font-label-sm text-sm text-starlight-white tracking-wide">{uploadToast}</span>
+      </div>
     </AppShell>
   );
 };

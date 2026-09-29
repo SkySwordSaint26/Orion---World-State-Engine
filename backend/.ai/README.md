@@ -12,7 +12,7 @@ The World State Engine converts narrative fiction prose into a structured, query
 
 1. **Extraction is Probabilistic**: An LLM extracts entities, relationships, and events from chapter text into structured JSON.
 2. **State Integration is Deterministic**: Mentions are clustered into canonical entities, facts are versioned rather than overwritten, and relationships are mapped.
-3. **Consistency Verification is Rule-Based**: Per **SRS REQ-27**, contradiction detection **never** relies on an LLM to decide conflicts. It runs deterministic algorithms (age progression, location clashes, post-mortem actions, relationship mutations, and DFS temporal cycles).
+3. **Consistency Verification is Rule-Based**: Per **SRS REQ-27**, contradiction detection **never** relies on an LLM to decide conflicts. It runs deterministic rules (immutable facts, age progression, dead-then-alive status, relationship conflicts, and DFS temporal cycles); location clashes and acting-after-death are deferred (see [`context/consistency_engine.md`](context/consistency_engine.md)).
 4. **World State is Permanent**: Per **SRS REQ-22 & Section 6**, previously stored facts are never overwritten in SQL. All versions are retained forever.
 
 ---

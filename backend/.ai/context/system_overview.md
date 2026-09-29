@@ -32,7 +32,7 @@ To ensure the backend is equally enjoyable to develop locally (zero dependencies
      YES /            \ NO (Local Dev / Offline Tests)
         ▼              ▼
 [Celery Task Queue]   [FastAPI BackgroundTasks]
-  extract_chapter_task   execute_chapter_extraction()
+  run_extraction_job_task   run_extraction_job()
         │              │
         └───────┬──────┘
                 ▼
@@ -40,11 +40,11 @@ To ensure the backend is equally enjoyable to develop locally (zero dependencies
 ```
 
 1. **Production / Docker Mode**:
-   - Extraction runs are dispatched as Celery tasks (`extract_chapter_task.delay(...)`).
-   - Redis manages the queue. Multiple worker instances can run concurrently across machines.
+   - `EXTRACTION_EXECUTOR=celery`: each job is dispatched as ONE Celery task (`run_extraction_job_task`), which runs the job's chapters in order.
+   - Redis manages the queue. Different jobs/worlds can run concurrently across worker instances; chapters within a job never do.
 2. **Local Dev / Single Process Mode**:
-   - If Redis is unavailable or in development, tasks execute via FastAPI's native `BackgroundTasks`.
-   - The same underlying business logic function (`execute_chapter_extraction`) is called, preserving complete functional equivalence.
+   - `EXTRACTION_EXECUTOR=background` (default): the same `run_extraction_job` function executes via FastAPI's native `BackgroundTasks`, so Redis is not needed.
+   - The choice is explicit configuration. If the configured executor is unreachable the job fails (API returns 503); the system does not silently switch executors.
 
 ---
 
@@ -67,8 +67,8 @@ backend/storage/
 
 ## 4. Documentation References
 
-- **Software Requirements Specification (SRS v1.0)**: [`backend/docs/srs.md`](../../docs/srs.md)
-- **REST API Reference & Endpoint Specifications**: [`backend/docs/api.md`](../../docs/api.md)
+- **Software Requirements Specification (SRS v1.0)**: [`docs/srs.md`](../../../docs/srs.md)
+- **REST API Reference & Endpoint Specifications**: [`docs/api.md`](../../../docs/api.md)
 - **Database Schema Reference**: [`backend/.ai/context/db_schema_reference.md`](db_schema_reference.md)
 - **API Contracts (AI Agent context)**: [`backend/.ai/context/api_contracts.md`](api_contracts.md)
 

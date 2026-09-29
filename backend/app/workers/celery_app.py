@@ -4,7 +4,8 @@ from app.config.settings import settings
 celery_app = Celery(
     "orion_worker",
     broker=settings.CELERY_BROKER_URL,
-    backend=settings.CELERY_RESULT_BACKEND
+    backend=settings.CELERY_RESULT_BACKEND,
+    include=["app.workers.tasks.extraction_task", "app.workers.tasks.job_update_task"]
 )
 
 celery_app.conf.update(

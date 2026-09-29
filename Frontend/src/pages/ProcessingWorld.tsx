@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { apiFetch } from '../api/client';
+import { useWorldStore } from '../store/useWorldStore';
 
 export const ProcessingWorld: React.FC = () => {
   const navigate = useNavigate();
@@ -49,14 +50,20 @@ export const ProcessingWorld: React.FC = () => {
     return () => clearInterval(pollInterval);
   }, [location.search]);
 
+  const { fetchManuscriptsForWorld, fetchEntitiesForWorld } = useWorldStore();
+
   useEffect(() => {
     if (progress === 100) {
+      if (worldId) {
+        fetchManuscriptsForWorld(worldId);
+        fetchEntitiesForWorld(worldId);
+      }
       const timeout = setTimeout(() => {
         navigate(`/worlds/${worldId || ''}`);
       }, 1200);
       return () => clearTimeout(timeout);
     }
-  }, [progress, navigate, worldId]);
+  }, [progress, navigate, worldId, fetchManuscriptsForWorld, fetchEntitiesForWorld]);
 
   return (
     <div className="bg-void-black text-on-surface h-screen w-screen overflow-hidden flex flex-col items-center justify-center relative selection:bg-primary/30 selection:text-primary-fixed select-none">

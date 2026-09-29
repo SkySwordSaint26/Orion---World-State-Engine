@@ -10,8 +10,7 @@ import {
   initialWorlds, 
   initialEntities, 
   initialTimelineEvents, 
-  initialContradictions, 
-  demoManuscripts 
+  initialContradictions 
 } from '../data/mockData';
 import { apiFetch } from '../api/client';
 
@@ -60,7 +59,10 @@ interface WorldState {
   resolveContradiction: (id: string) => void;
   
   // Manuscript Actions
+  fetchManuscriptsForWorld: (worldId: string) => Promise<Manuscript[]>;
   updateChapterContent: (manuscriptId: string, chapterId: string, content: string) => void;
+  deleteChapter: (manuscriptId: string, chapterId: string) => void;
+  deleteManuscript: (manuscriptId: string) => void;
 }
 
 export const useWorldStore = create<WorldState>((set, get) => ({
@@ -68,11 +70,11 @@ export const useWorldStore = create<WorldState>((set, get) => ({
   entities: initialEntities,
   timelineEvents: initialTimelineEvents,
   contradictions: initialContradictions,
-  manuscripts: demoManuscripts,
+  manuscripts: [],
   
   activeWorldId: 'terra-incognita',
-  activeManuscriptId: 'ms-1',
-  activeChapterId: 'ch2',
+  activeManuscriptId: null,
+  activeChapterId: null,
   activeEntityId: null,
   activeTimelineEventId: 'tle-2',
   
@@ -80,11 +82,12 @@ export const useWorldStore = create<WorldState>((set, get) => ({
   
   setActiveWorld: (id) => set({ 
     activeWorldId: id,
-    activeManuscriptId: id === 'terra-incognita' ? 'ms-1' : null,
-    activeChapterId: id === 'terra-incognita' ? 'ch2' : null,
+    activeManuscriptId: null,
+    activeChapterId: null,
     activeEntityId: null,
     activeTimelineEventId: id === 'terra-incognita' ? 'tle-2' : null,
-    isEntityPanelOpen: false
+    isEntityPanelOpen: false,
+    manuscripts: []
   }),
   
   setActiveManuscript: (id) => set((state) => {
@@ -359,5 +362,91 @@ export const useWorldStore = create<WorldState>((set, get) => ({
       return m;
     });
     return { manuscripts: updatedManuscripts };
-  })
+  }),
+
+  deleteChapter: (manuscriptId, chapterId) => set((state) => {
+    const updatedManuscripts = state.manuscripts
+      .map(m => {
+        if (m.id === manuscriptId) {
+          return { ...m, chapters: m.chapters.filter(c => c.id !== chapterId) };
+        }
+        return m;
+      })
+      .filter(m => m.chapters.length > 0);
+
+    const activeManuscriptRemoved = !updatedManuscripts.some(m => m.id === state.activeManuscriptId);
+
+    return {
+      manuscripts: updatedManuscripts,
+      activeManuscriptId: activeManuscriptRemoved
+        ? (updatedManuscripts[0]?.id || null)
+        : state.activeManuscriptId,
+      activeChapterId: state.activeChapterId === chapterId || activeManuscriptRemoved
+        ? (activeManuscriptRemoved ? (updatedManuscripts[0]?.chapters[0]?.id || null) : null)
+        : state.activeChapterId
+    };
+  }),
+
+  deleteManuscript: (manuscriptId) => set((state) => {
+    const updatedManuscripts = state.manuscripts.filter(m => m.id !== manuscriptId);
+    const activeManuscriptRemoved = state.activeManuscriptId === manuscriptId;
+
+    return {
+      manuscripts: updatedManuscripts,
+      activeManuscriptId: activeManuscriptRemoved
+        ? (updatedManuscripts[0]?.id || null)
+        : state.activeManuscriptId,
+      activeChapterId: activeManuscriptRemoved
+        ? (updatedManuscripts[0]?.chapters[0]?.id || null)
+        : state.activeChapterId
+    };
+  }),
+
+  fetchManuscriptsForWorld: async (worldId: string) => {
+    try {
+      const data = await apiFetch<any[]>(`/worlds/${worldId}/manuscripts`);
+      const mapped: Manuscript[] = await Promise.all(
+        data.map(async (m: any) => {
+          let chapters: any[] = [];
+          try {
+            const chs = await apiFetch<any[]>(`/worlds/${worldId}/manuscripts/${m.id}/chapters`);
+            chapters = chs.map(ch => ({
+              id: ch.id,
+              number: ch.chapter_number,
+              title: ch.title,
+              content: ch.content || '',
+              wordCount: ch.word_count || 1200
+            }));
+          } catch (_) {}
+
+          return {
+            id: m.id,
+            title: m.title,
+            chapters
+          };
+        })
+      );
+      // Filter out manuscripts that have 0 chapters so empty manuscripts are not displayed
+      const validManuscripts = mapped.filter(m => m.chapters.length > 0);
+      set({ manuscripts: validManuscripts });
+      
+      // Select the first manuscript/chapter if nothing is selected or if previously active manuscript was removed
+      const currentState = get();
+      if ((!currentState.activeManuscriptId || !validManuscripts.some(m => m.id === currentState.activeManuscriptId)) && validManuscripts.length > 0) {
+        set({
+          activeManuscriptId: validManuscripts[0].id,
+          activeChapterId: validManuscripts[0].chapters.length > 0 ? validManuscripts[0].chapters[0].id : null
+        });
+      } else if (validManuscripts.length === 0) {
+        set({
+          activeManuscriptId: null,
+          activeChapterId: null
+        });
+      }
+      return validManuscripts;
+    } catch (err) {
+      console.warn("Failed to fetch manuscripts", err);
+      return [];
+    }
+  }
 }));

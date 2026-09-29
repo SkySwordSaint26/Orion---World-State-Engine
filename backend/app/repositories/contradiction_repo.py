@@ -20,7 +20,8 @@ class ContradictionRepository(BaseRepository[Contradiction]):
         event_id_a: Optional[str] = None,
         event_id_b: Optional[str] = None,
         confidence: float = 1.0,
-        status: str = ContradictionStatus.DETECTED.value
+        status: str = ContradictionStatus.DETECTED.value,
+        commit: bool = True
     ) -> Contradiction:
         con = Contradiction(
             world_id=world_id,
@@ -35,10 +36,42 @@ class ContradictionRepository(BaseRepository[Contradiction]):
             confidence=confidence,
             status=status
         )
-        self.db.add(con)
-        self.db.commit()
-        self.db.refresh(con)
-        return con
+        return self._persist(con, commit)
+
+    def find_existing(
+        self,
+        world_id: str,
+        contradiction_type: str,
+        rule_prefix: str,
+        explanation: str,
+        old_fact_version_id: Optional[str] = None,
+        new_fact_version_id: Optional[str] = None,
+        old_relationship_version_id: Optional[str] = None,
+        new_relationship_version_id: Optional[str] = None,
+        event_id_a: Optional[str] = None,
+        event_id_b: Optional[str] = None,
+    ) -> Optional[Contradiction]:
+        """
+        Finds an already-recorded contradiction for the same rule and the same conflicting rows
+        (any status, so a RESOLVED/DISMISSED one is not re-raised). When the row references no
+        versions or events at all, the exact explanation text is the only identity available.
+        """
+        fk_values = (old_fact_version_id, new_fact_version_id, old_relationship_version_id,
+                     new_relationship_version_id, event_id_a, event_id_b)
+        query = self.db.query(Contradiction).filter(
+            Contradiction.world_id == world_id,
+            Contradiction.contradiction_type == contradiction_type,
+            Contradiction.explanation.startswith(rule_prefix, autoescape=True),
+            Contradiction.old_fact_version_id == old_fact_version_id,
+            Contradiction.new_fact_version_id == new_fact_version_id,
+            Contradiction.old_relationship_version_id == old_relationship_version_id,
+            Contradiction.new_relationship_version_id == new_relationship_version_id,
+            Contradiction.event_id_a == event_id_a,
+            Contradiction.event_id_b == event_id_b,
+        )
+        if all(v is None for v in fk_values):
+            query = query.filter(Contradiction.explanation == explanation)
+        return query.first()
 
     def list_by_world(self, world_id: str, status: Optional[str] = None) -> List[Contradiction]:
         query = self.db.query(Contradiction).filter(Contradiction.world_id == world_id)

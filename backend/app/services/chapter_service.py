@@ -37,6 +37,42 @@ class ChapterService:
     def list_chapters(self, manuscript_id: str) -> List[Chapter]:
         return self.chapter_repo.get_by_manuscript(manuscript_id)
 
+    def create_chapter(self, manuscript_id: str, title: str, content: str = "") -> Chapter:
+        existing = self.list_chapters(manuscript_id)
+        next_num = max([ch.chapter_number for ch in existing], default=0) + 1
+        
+        chapter = self.chapter_repo.create({
+            "manuscript_id": manuscript_id,
+            "chapter_number": next_num,
+            "title": title
+        })
+        
+        if content:
+            content_bytes = content.encode("utf-8")
+            ch_hash = compute_file_sha256(content_bytes)
+            ch_path = save_file_content(content_bytes, f"ch_{next_num}.txt", subfolder=f"chapters/{manuscript_id}")
+            self.chapter_repo.create_version(chapter.id, ch_path, ch_hash, 1)
+            
+        return chapter
+
+    def delete_chapter(self, chapter_id: str) -> None:
+        chapter = self.chapter_repo.get(chapter_id)
+        if not chapter:
+            return
+        manuscript_id = chapter.manuscript_id
+        self.chapter_repo.delete(chapter_id)
+        if manuscript_id:
+            remaining = self.chapter_repo.get_by_manuscript(manuscript_id)
+            if len(remaining) == 0:
+                self.manuscript_repo.delete(manuscript_id)
+
+    def get_chapter_versions(self, chapter_id: str) -> List[ChapterVersion]:
+        chapter = self.chapter_repo.get(chapter_id)
+        if not chapter:
+            return []
+        # Return versions sorted by version number descending
+        return sorted(chapter.versions, key=lambda v: v.version_number, reverse=True)
+
     def update_chapter_content(
         self,
         chapter_id: str,

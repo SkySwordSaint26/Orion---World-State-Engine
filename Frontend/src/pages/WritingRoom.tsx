@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { useWorldStore } from '../store/useWorldStore';
 import { apiFetch } from '../api/client';
 
 export const WritingRoom: React.FC = () => {
+  const navigate = useNavigate();
   const { worldId, manuscriptId } = useParams<{ worldId: string; manuscriptId: string }>();
   
   const { 
@@ -14,11 +15,23 @@ export const WritingRoom: React.FC = () => {
     setActiveChapter, 
     entities,
     setActiveEntity,
-    updateChapterContent
+    updateChapterContent,
+    fetchManuscriptsForWorld,
+    deleteChapter
   } = useWorldStore();
 
   const currentWorldId = worldId || 'terra-incognita';
   const currentManuscriptId = manuscriptId || activeManuscriptId || 'ms-1';
+
+  useEffect(() => {
+    if (currentWorldId && !currentWorldId.startsWith('terra-')) {
+      const exists = manuscripts.some((m) => m.id === currentManuscriptId);
+      if (!exists || manuscripts.length === 0) {
+        fetchManuscriptsForWorld(currentWorldId);
+      }
+    }
+  }, [currentWorldId, currentManuscriptId, manuscripts, fetchManuscriptsForWorld]);
+
   const manuscript = manuscripts.find((m) => m.id === currentManuscriptId);
   const activeChapter = manuscript?.chapters.find((ch) => ch.id === activeChapterId) || manuscript?.chapters[0];
 
@@ -26,6 +39,9 @@ export const WritingRoom: React.FC = () => {
   const [editorContent, setEditorContent] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionStatus, setExtractionStatus] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyVersions, setHistoryVersions] = useState<any[]>([]);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeChapter) {
@@ -108,6 +124,93 @@ export const WritingRoom: React.FC = () => {
     handleSaveEdit();
   };
 
+  const handleCreateChapter = async () => {
+    const title = prompt('Enter new chapter title:');
+    if (title && title.trim()) {
+      const nextNum = (manuscript?.chapters.length || 0) + 1;
+      let newChapter = {
+        id: `ch-${Date.now()}`,
+        number: nextNum,
+        title: title.trim(),
+        content: 'Start writing your new chapter here...',
+        wordCount: 7
+      };
+
+      if (currentWorldId && !currentWorldId.startsWith('terra-')) {
+        try {
+          const res = await apiFetch<any>(`/worlds/${currentWorldId}/manuscripts/${currentManuscriptId}/chapters`, {
+            method: 'POST',
+            body: JSON.stringify({
+              chapter_number: nextNum,
+              title: title.trim(),
+              content: 'Start writing your new chapter here...'
+            })
+          });
+          newChapter.id = res.id;
+          newChapter.number = res.chapter_number;
+          newChapter.title = res.title;
+          if (res.content) newChapter.content = res.content;
+        } catch (err: any) {
+          alert('Failed to create chapter: ' + err.message);
+          return;
+        }
+      }
+
+      if (manuscript) {
+        const updated = [...manuscript.chapters, newChapter];
+        const updatedManuscripts = manuscripts.map(m => 
+          m.id === manuscript.id ? { ...m, chapters: updated } : m
+        );
+        useWorldStore.setState({ manuscripts: updatedManuscripts, activeChapterId: newChapter.id });
+      }
+    }
+  };
+
+  const handleDeleteChapter = (e: React.MouseEvent, chapterId: string) => {
+    e.stopPropagation();
+    setDeleteConfirmId(chapterId);
+  };
+
+  const executeDeleteChapter = async () => {
+    if (!deleteConfirmId) return;
+    const chapterId = deleteConfirmId;
+    
+    if (currentWorldId && !currentWorldId.startsWith('terra-')) {
+      try {
+        await apiFetch(`/worlds/${currentWorldId}/chapters/${chapterId}`, {
+          method: 'DELETE'
+        });
+      } catch (err: any) {
+        alert('Failed to delete chapter: ' + err.message);
+        setDeleteConfirmId(null);
+        return;
+      }
+    }
+
+    if (manuscript) {
+      const remaining = manuscript.chapters.filter(c => c.id !== chapterId);
+      deleteChapter(manuscript.id, chapterId);
+      if (remaining.length === 0) {
+        navigate(`/worlds/${currentWorldId}/manuscripts`);
+      } else if (activeChapterId === chapterId) {
+        setActiveChapter(remaining[0]?.id || null);
+      }
+    }
+    setDeleteConfirmId(null);
+  };
+
+  const handleViewHistory = async () => {
+    if (!activeChapter || !currentWorldId || currentWorldId.startsWith('terra-')) return;
+    try {
+      const versions = await apiFetch<any[]>(`/worlds/${currentWorldId}/chapters/${activeChapter.id}/versions`);
+      setHistoryVersions(versions);
+      setShowHistory(true);
+    } catch (err: any) {
+      alert('Failed to load history: ' + err.message);
+    }
+  };
+
+
   // Helper to split text by entity names and inject interactive highlight tags
   const renderTextWithHighlights = (text: string) => {
     if (!text) return null;
@@ -168,26 +271,7 @@ export const WritingRoom: React.FC = () => {
           <div className="p-4 border-b border-starlight-white/5 flex items-center justify-between bg-gradient-to-b from-surface-container-highest/20 to-transparent">
             <h2 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest text-[10px]">Chapters</h2>
             <button 
-              onClick={() => {
-                const title = prompt('Enter new chapter title:');
-                if (title && title.trim()) {
-                  const nextNum = (manuscript?.chapters.length || 0) + 1;
-                  const newChapter = {
-                    id: `ch-${Date.now()}`,
-                    number: nextNum,
-                    title: title.trim(),
-                    content: 'Start writing your new chapter here...',
-                    wordCount: 5
-                  };
-                  if (manuscript) {
-                    const updated = [...manuscript.chapters, newChapter];
-                    const updatedManuscripts = manuscripts.map(m => 
-                      m.id === manuscript.id ? { ...m, chapters: updated } : m
-                    );
-                    useWorldStore.setState({ manuscripts: updatedManuscripts, activeChapterId: newChapter.id });
-                  }
-                }
-              }}
+              onClick={handleCreateChapter}
               className="text-on-surface-variant/65 hover:text-primary transition-colors p-1"
             >
               <span className="material-symbols-outlined text-sm font-light">add</span>
@@ -216,10 +300,17 @@ export const WritingRoom: React.FC = () => {
                       <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary"></div>
                     </>
                   )}
-                  <div className={`font-label-sm text-[10px] uppercase tracking-wider mb-1 ${isActive ? 'text-primary' : 'text-on-surface-variant/40'}`}>
-                    Chapter {ch.number}
+                  <div className={`font-label-sm text-[10px] uppercase tracking-wider mb-1 flex justify-between items-center ${isActive ? 'text-primary' : 'text-on-surface-variant/40'}`}>
+                    <span>Chapter {ch.number}</span>
+                    <button 
+                      onClick={(e) => handleDeleteChapter(e, ch.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400"
+                      title="Delete Chapter"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">delete</span>
+                    </button>
                   </div>
-                  <div className="font-body-md text-sm font-medium">{ch.title}</div>
+                  <div className="font-body-md text-sm font-medium pr-4">{ch.title}</div>
                 </div>
               );
             })}
@@ -229,15 +320,7 @@ export const WritingRoom: React.FC = () => {
         {/* Right main panel: Editor Canvas */}
         <section className="flex-1 flex flex-col relative overflow-hidden">
           
-          {/* Extraction Banner if running */}
-          {extractionStatus && (
-            <div className="bg-copper-glow/10 border-b border-copper-glow/30 px-6 py-2 text-xs text-copper-glow flex items-center justify-between z-30">
-              <span className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-base animate-spin">refresh</span>
-                {extractionStatus}
-              </span>
-            </div>
-          )}
+
 
           {/* Action Bar */}
           <div className="h-16 flex items-center justify-between px-8 border-b border-starlight-white/5 bg-surface-container-lowest/60 backdrop-blur-sm z-20 select-none">
@@ -268,6 +351,16 @@ export const WritingRoom: React.FC = () => {
                 </span>
                 {isExtracting ? 'Extracting...' : 'Re-run Extraction'}
               </button>
+
+              {!isEditing && (
+                <button 
+                  onClick={handleViewHistory}
+                  className="px-4 py-1.5 rounded-full text-on-surface-variant/80 font-label-sm text-xs uppercase tracking-wider hover:text-primary hover:bg-primary/5 transition-all flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[16px] font-light">history</span>
+                  History
+                </button>
+              )}
             </div>
 
             <div className="flex items-center gap-4 text-on-surface-variant/40 font-label-sm text-[10px] uppercase tracking-wider">
@@ -319,6 +412,74 @@ export const WritingRoom: React.FC = () => {
         </section>
 
       </main>
+
+      {/* History Modal */}
+      {showHistory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void-black/80 backdrop-blur-sm">
+          <div className="bg-surface-container-high border border-starlight-white/10 rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div className="p-6 border-b border-starlight-white/5 flex justify-between items-center">
+              <h2 className="font-headline-md text-starlight-white">Chapter History</h2>
+              <button onClick={() => setShowHistory(false)} className="text-on-surface-variant/60 hover:text-primary">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {historyVersions.length === 0 ? (
+                <p className="text-on-surface-variant/60 text-sm">No history available.</p>
+              ) : (
+                historyVersions.map((v: any) => (
+                  <div key={v.id} className="p-4 rounded border border-starlight-white/5 bg-surface-container-low flex justify-between items-center">
+                    <div>
+                      <h3 className="text-starlight-white text-sm font-medium">Version {v.version_number} {v.is_current ? '(Current)' : ''}</h3>
+                      <p className="text-on-surface-variant/60 text-xs mt-1">Saved: {new Date(v.created_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Extraction Toast */}
+      <div 
+        className={`fixed bottom-8 right-8 z-50 flex items-center gap-3 px-5 py-3 rounded-xl bg-surface-container-high/90 backdrop-blur-md border border-primary/30 shadow-[0_8px_32px_rgba(235,166,134,0.15)] transition-all duration-500 transform ${
+          extractionStatus ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'
+        }`}
+      >
+        <span className="material-symbols-outlined text-primary text-xl animate-spin">refresh</span>
+        <span className="font-label-sm text-sm text-starlight-white tracking-wide">{extractionStatus}</span>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void-black/80 backdrop-blur-sm">
+          <div className="bg-surface-container-high border border-primary/30 rounded-xl shadow-[0_8px_32px_rgba(235,166,134,0.15)] max-w-md w-full p-6 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="font-headline-sm text-starlight-white flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">warning</span>
+              Delete Chapter
+            </h3>
+            <p className="text-on-surface-variant text-sm leading-relaxed">
+              Are you sure you want to delete this chapter? This action cannot be undone and will permanently remove its content.
+            </p>
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="px-4 py-2 rounded-lg font-label-sm text-sm text-starlight-white/70 hover:text-starlight-white hover:bg-surface-container-highest transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeDeleteChapter}
+                className="px-4 py-2 rounded-lg font-label-sm text-sm bg-primary/20 text-primary border border-primary/50 hover:bg-primary hover:text-void-black transition-colors shadow-md"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 };
+

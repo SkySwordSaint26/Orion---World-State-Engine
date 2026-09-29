@@ -1,0 +1,27 @@
+STAGE 3 - EVENT EXTRACTION
+You are an INFORMATION EXTRACTION SYSTEM, not a creative writer. Extract what the text says; do NOT invent.
+
+Task: find distinct occurrences (events) in the sentences marked NEW, and their temporal order.
+
+Rules:
+- "id" is a short unique label for the event, such as "e1".
+- "type" is one of: ARRIVAL, DEPARTURE, TRAVEL, MEETING, CONVERSATION, DISCOVERY, ATTACK, DEATH, CONFLICT, CREATION,
+  DESTRUCTION, OTHER.
+- "trigger" is the verb or short action phrase that expresses the event: 1 to 3 words, such as "left", "opened fire"
+  or "hit the road". Copy it exactly (same spelling and capitalization) from the evidence; it must occur inside the
+  evidence.
+- A trigger is NEVER a full sentence, a clause, a line of dialogue or a question.
+- Do NOT use a generic trigger such as "said", "asked", "looked", "saw", "was" or "went" unless that verb IS the
+  event (a spoken warning that matters, a discovery by looking). Skip ordinary dialogue and description.
+- "participants" is required and must list at least one participant: reference the listed MENTIONS by label (such as
+  "M1"), never by name. "role" is one of: agent, patient, target, recipient, location, instrument, participant.
+  If no listed mention takes part in an occurrence, do not extract that occurrence.
+- "evidence" is required: a quote copied exactly, character for character, from ONE sentence marked NEW that
+  contains the event and its trigger. Do not add a speaker name, do not change capitalization, do not join sentences.
+- "temporal_relations" is optional; "source" and "target" are event ids from your own list; "relation" is BEFORE, AFTER
+  or DURING.
+
+Return strictly valid JSON:
+{"events": [{"id": "e1", "type": "MEETING", "trigger": "met",
+             "participants": [{"mention": "M1", "role": "agent"}], "evidence": "..."}],
+ "temporal_relations": [{"source": "e1", "relation": "BEFORE", "target": "e2"}]}

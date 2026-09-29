@@ -1,0 +1,25 @@
+M034: span (5391, 5396) cuts through a word: ...ugh my earphones. It was ...
+M055: span (1553, 1557) cuts through a word: ...w, I like birds. I gener...
+M063: span (1012, 1018) cuts through a word: ...n the background saying: “...
+M065: span (4616, 4619) cuts through a word: ...oying the sunny skies t...
+C004: dropped, a cluster needs at least 2 mentions (has ['M008'])
+C007: dropped, a cluster needs at least 2 mentions (has ['M011'])
+C009: dropped, a cluster needs at least 2 mentions (has ['M013'])
+C011: dropped, a cluster needs at least 2 mentions (has ['M015'])
+C015: dropped, a cluster needs at least 2 mentions (has ['M023'])
+C016: dropped, a cluster needs at least 2 mentions (has ['M024'])
+C017: dropped, a cluster needs at least 2 mentions (has ['M029'])
+C021: dropped, a cluster needs at least 2 mentions (has ['M044'])
+C022: dropped, a cluster needs at least 2 mentions (has ['M045'])
+C025: dropped, a cluster needs at least 2 mentions (has ['M058'])
+C027: dropped, a cluster needs at least 2 mentions (has ['M063'])
+C028: dropped, a cluster needs at least 2 mentions (has ['M064'])
+C029: dropped, a cluster needs at least 2 mentions (has ['M066'])
+C030: dropped, a cluster needs at least 2 mentions (has ['M067'])
+E018: trigger span (4909, 4920) cuts through a word: ...utes of uninterrupted music her...
+T012: span (2320, 2323) cuts through a word: ...quiet. I know that shou...
+13 temporal expression(s) have no annotated type; set to 'other'
+E008, E009, E028: same event trigger span (991, 996) 'heard' annotated 3 times
+T009, T013: same temporal expression span (10672, 10681) 'after all' annotated 2 times
+'review_notes' is not part of the schema; dropped
+'source_file' is not part of the schema; dropped

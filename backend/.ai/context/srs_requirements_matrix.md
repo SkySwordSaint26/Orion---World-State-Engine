@@ -1,6 +1,6 @@
 # SRS Requirements Traceability Matrix (SRS v1.0)
 
-This matrix maps every functional requirement (REQ-1 through REQ-51) and non-functional quality attribute from [`backend/docs/srs.md`](../../docs/srs.md) directly to the backend architecture components.
+This matrix maps every functional requirement (REQ-1 through REQ-51) and non-functional quality attribute from [`docs/srs.md`](../../../docs/srs.md) directly to the backend architecture components.
 
 ---
 
@@ -30,12 +30,12 @@ This matrix maps every functional requirement (REQ-1 through REQ-51) and non-fun
 | **REQ-20**| Record ID, type, attributes, history | [`models/entity.py`](../../app/models/entity.py), [`models/fact.py`](../../app/models/fact.py) | UUID PKs, JSON attributes, version timestamp rows |
 | **REQ-21**| Fact metadata (entity, property, val, ch)| [`models/fact.py`](../../app/models/fact.py) | `fact_versions` table with chapter & run FKs |
 | **REQ-22**| Never overwrite stored facts | [`services/world_state_service.py`](../../app/services/world_state_service.py), [`models/fact.py`](../../app/models/fact.py) | Append-only versions (`ACTIVE`, `SUPERSEDED`, `CONTRADICTED`) |
-| **REQ-23**| Character age contradiction check | [`services/consistency_service.py`](../../app/services/consistency_service.py) | Rule: non-monotonic age decrease flagged |
-| **REQ-24**| Character location contradiction check | [`services/consistency_service.py`](../../app/services/consistency_service.py) | Rule: simultaneous multi-location presence |
-| **REQ-25**| Relationship contradiction check | [`pipeline/resolution/relationship_resolution.py`](../../app/pipeline/resolution/relationship_resolution.py) | Incompatible relationship transitions flagged |
-| **REQ-26**| Character status contradiction check | [`services/consistency_service.py`](../../app/services/consistency_service.py) | Rule: post-mortem actions/speech flagged |
-| **REQ-27**| Rule-based detection (no LLM) | [`services/consistency_service.py`](../../app/services/consistency_service.py) | 100% deterministic Python rule algorithms |
-| **REQ-28**| Contradiction check latency ≤ 5s | [`services/consistency_service.py`](../../app/services/consistency_service.py) | In-memory DFS and dictionary hash lookups |
+| **REQ-23**| Character age contradiction check | [`consistency/rules.py`](../../app/consistency/rules.py) `AgeMonotonicRule` | IMPLEMENTED: age lower than an earlier chapter's (or higher than a later one's) flagged; no flashback marker exists |
+| **REQ-24**| Character location contradiction check | — | DEFERRED: frozen schema has no event location/time, so "same time, two places" is undecidable |
+| **REQ-25**| Relationship contradiction check | [`consistency/rules.py`](../../app/consistency/rules.py) `IncompatiblePredicateRule`, `SingleValuedIncomingRule` | IMPLEMENTED for explicit incompatible pairs and a changing `FATHER_OF`; "without explanation" cannot be evaluated |
+| **REQ-26**| Character status contradiction check | [`consistency/rules.py`](../../app/consistency/rules.py) `DeadThenAliveRule` | PARTIAL: dead then alive (status facts) flagged; speaking/acting after death DEFERRED (no speaker/role data) |
+| **REQ-27**| Rule-based detection (no LLM) | [`app/consistency/`](../../app/consistency/) | IMPLEMENTED: deterministic rules; a test verifies the package imports no LLM/network code |
+| **REQ-28**| Contradiction check latency ≤ 5s | [`services/consistency_service.py`](../../app/services/consistency_service.py) | Checks are incremental (per entity/property/pair); not benchmarked against the 5s budget |
 | **REQ-29**| Display contradiction details | [`routes/contradictions.py`](../../app/api/v1/routes/contradictions.py), [`schemas/contradiction.py`](../../app/schemas/contradiction.py) | Entity, property, old_val, new_val, chapters |
 | **REQ-30**| Display contradiction confidence score | [`models/contradiction.py`](../../app/models/contradiction.py) | `confidence: Float` field on all contradictions |
 | **REQ-31**| Plain-language conflict explanation | [`services/consistency_service.py`](../../app/services/consistency_service.py) | Formatted explanatory string generated per rule |

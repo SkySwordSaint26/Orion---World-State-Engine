@@ -109,7 +109,7 @@ backend/
 │   │
 │   ├── utils/                # Helpers
 │   │   ├── file_handler.py   # File system storage & safe reading
-│   │   ├── text_splitter.py  # Chapter boundary detection & token-safe chunking
+│   │   ├── text_splitter.py  # Chapter boundary detection (its chunk_text is deprecated)
 │   │   └── hashing.py        # SHA256 & UUID utilities
 │   │
 │   └── tests/                # Automated Test Suite
@@ -155,7 +155,9 @@ Copy or edit `.env`:
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/orion"
 REDIS_URL="redis://localhost:6379/0"
-LLM_PROVIDER="ollama" # or "openai" or "mock"
+LLM_PROVIDER="ollama" # or "openai"; "mock" is an explicit offline/test mode only (no automatic fallback if the LLM fails)
+EXTRACTION_PIPELINE="monolithic" # or "split" (4 focused, validated LLM stages per chunk)
+EXTRACTION_EXECUTOR="background" # or "celery" (one ordered task per job; requires Redis + a worker)
 OLLAMA_URL="http://localhost:11434/api/chat"
 OLLAMA_MODEL="llama3.1:8b-instruct-q4_K_M"
 ```
