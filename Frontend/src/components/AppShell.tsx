@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { useWorldStore } from '../store/useWorldStore';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -18,8 +18,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
     isEntityPanelOpen, 
     setEntityPanelOpen,
     setActiveWorld,
+    activeWorldId,
     contradictions
   } = useWorldStore();
+
+  // The URL decides the world (a reload or a pasted link has no earlier selection in the store)
+  useEffect(() => {
+    if (worldId && worldId !== activeWorldId) setActiveWorld(worldId);
+  }, [worldId, activeWorldId, setActiveWorld]);
 
   const currentPath = location.pathname;
   const currentWorldId = worldId || 'terra-incognita';

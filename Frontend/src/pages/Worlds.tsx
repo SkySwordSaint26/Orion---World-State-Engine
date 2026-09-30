@@ -23,13 +23,13 @@ export const Worlds: React.FC = () => {
         description: w.description || '',
         status: 'active',
         coverImage: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAuBUQknn_uISnwdR-0unHTT5VRn-yce6HhfPUnOIG_Ony7WbXISoUWuWh5wyVeqSOLTYFIiAP74lHr0RUBulB0dCbAuA9H3-tAAOjJyR81Mq8O6R3RvmKn59tBm-9l7GCG4SfTilfGXtrFZCYZB8exnTe1_mAXZFow2X7Xc6mLFUmxt3pgQ06mqEa2md5K7Pjv_DD0xt27x6wjj1JqQ9A-zVBTwdoBwbbKRPLuYWojrHy2j6YDRs9kHg',
-        entryCount: w.stats?.fact_count || 0,
-        entityCount: w.stats?.entity_count || 0,
-        manuscriptCount: w.stats?.manuscript_count || 0,
-        characterCount: w.stats?.character_count || 0,
-        locationCount: w.stats?.location_count || 0,
-        objectCount: w.stats?.object_count || 0,
-        eventCount: w.stats?.event_count || 0,
+        entryCount: 0,                                  // not reported by the API (no fact count in the stats)
+        entityCount: w.stats?.entities_count || 0,      // keys as in backend WorldRepository.get_world_stats
+        manuscriptCount: w.stats?.manuscripts_count || 0,
+        characterCount: w.stats?.characters_count || 0,
+        locationCount: w.stats?.locations_count || 0,
+        objectCount: w.stats?.objects_count || 0,
+        eventCount: w.stats?.events_count || 0,
       }));
 
       setWorlds(mapped);
