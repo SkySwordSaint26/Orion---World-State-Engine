@@ -6,7 +6,6 @@ LLM strings onto the controlled vocabulary; today each returns its input unchang
 changes no behavior.
 
 Where they are called:
-  * observation creation (`app.contracts.mapping`)
   * the integration / consistency boundaries that carry TODO(property|relationship-normalization) markers
     (`WorldStateService`, `ConsistencyService`).
 

@@ -2,6 +2,8 @@
 
 This document explains the algorithmic mechanics of the narrative information extraction pipeline.
 
+> **Historical (2026-09-30):** the in-process LLM pipeline (monolithic and split), its parser, and the Phase 5-6 resolution and coreference packages were removed. Extraction is `../extractor` through `app/pipeline/extractor.py`. Only §1 (preprocessing) still describes live code; the rest is kept for its design rationale and is in git history.
+
 ---
 
 ## 1. Preprocessing & Chunking (`app/preprocessing/`)

@@ -45,7 +45,7 @@ def _manuscript(chapters=3):
 
 def test_upload_runs_one_ordered_background_job(api, monkeypatch):
     env, world_id, client = api
-    env.install_fake_llm()
+    env.install_fake_extractor()
     monkeypatch.setattr(settings, "EXTRACTION_EXECUTOR", "background")
 
     resp = client.post(f"/api/v1/worlds/{world_id}/manuscripts", files={"file": ("book.txt", _manuscript(), "text/plain")})
@@ -72,7 +72,7 @@ def test_upload_returns_503_and_fails_the_job_when_celery_is_unreachable(api, mo
 
 def test_chapter_edit_dispatches_a_single_chapter_job(api, monkeypatch):
     env, world_id, client = api
-    env.install_fake_llm()
+    env.install_fake_extractor()
     monkeypatch.setattr(settings, "EXTRACTION_EXECUTOR", "background")
     upload = client.post(f"/api/v1/worlds/{world_id}/manuscripts", files={"file": ("book.txt", _manuscript(2), "text/plain")})
     runs = env.runs_by_chapter(upload.json()["job_id"])

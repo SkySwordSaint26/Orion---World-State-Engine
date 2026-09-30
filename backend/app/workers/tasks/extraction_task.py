@@ -10,7 +10,7 @@ from app.models.extraction_run import ExtractionRun
 from app.models.processing_job import ProcessingJob
 from app.models.world import World
 from app.core.constants import JobStatus, ExtractionRunStatus
-from app.pipeline.extractor import orchestrator
+from app.pipeline import extractor
 from app.services.world_state_service import WorldStateService
 from app.utils.file_handler import read_file_text
 from app.workers.celery_app import celery_app
@@ -139,13 +139,13 @@ def _execute(
         if version is None or not version.content_path:
             raise LookupError(f"ChapterVersion {chapter_version_id} has no stored content")
         chapter_text = read_file_text(version.content_path)
-    db.commit()  # end the read transaction; nothing is held open while the LLM runs
+    db.commit()  # end the read transaction; nothing is held open while extraction runs
 
     logger.info(
         f"Starting extraction: world={world_id} job={job_id} run={extraction_run_id} "
         f"chapter_id={chapter_id} chapter={chapter_number}"
     )
-    extracted_data = orchestrator.extract_chapter(chapter_text, chapter_number=chapter_number)
+    extracted_data = extractor.extract_chapter(chapter_text, chapter_number)
 
     # ---- single integration transaction: lock -> ordering gate -> integrate -> DONE -> commit ----
     _lock_world(db, world_id)

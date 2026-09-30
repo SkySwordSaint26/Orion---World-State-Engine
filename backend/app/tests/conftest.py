@@ -1,12 +1,11 @@
 """
-Fixtures for the Phase 1 execution-safety tests (LLM failure handling, atomic integration,
+Fixtures for the Phase 1 execution-safety tests (extraction failure handling, atomic integration,
 chapter ordering, job/run error handling).
 
 `phase1_env` is opt-in (not autouse), so the older tests are unaffected. It uses a FILE-backed SQLite
 database so every session gets its own connection: a rollback or a missing commit is then visible
 exactly as it would be to another worker process.
 """
-import json
 import re
 from typing import Callable, Dict, List, Optional, Set, Tuple
 
@@ -26,7 +25,7 @@ from app.models.fact import Fact, FactVersion
 from app.models.processing_job import ProcessingJob
 from app.models.relationship import Relationship, RelationshipVersion
 from app.models.world import World
-from app.pipeline.llm_client import LLMError, llm_client
+from app.pipeline import extractor
 from app.services.manuscript_service import ManuscriptService
 from app.services.world_state_service import WorldStateService
 from app.workers.tasks import extraction_task, job_update_task
@@ -47,45 +46,39 @@ class Phase1Env:
         monkeypatch.setattr(job_update_task, "SessionLocal", self.Session)
         monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "storage"))
 
-        self.llm_calls: List[Tuple[str, int]] = []          # (world tag, chapter number) per LLM call
-        self.llm_fail: Set[Tuple[str, int]] = set()          # (world tag, chapter number) that must fail
+        self.extract_calls: List[Tuple[str, int]] = []      # (world tag, chapter number) per extraction
+        self.extract_fail: Set[Tuple[str, int]] = set()      # (world tag, chapter number) that must fail
         self.integration_order: List[int] = []               # chapter numbers, in integration order
         self._worlds: Dict[str, str] = {}
 
-    # ---- fake LLM -------------------------------------------------------------------------
-    def install_fake_llm(self) -> None:
+    # ---- fake extractor (stands in for the extraction pipeline, which needs the GPU) -------------------------------
+    def install_fake_extractor(self) -> None:
         env = self
 
-        def fake_generate(prompt, system_prompt=None, json_mode=True, temperature=0.0, schema=None):
-            chapter = int(re.search(r"Chapter (\d+)", prompt).group(1))
-            tag = re.search(r"\[(\w+)\]", prompt).group(1)
-            env.llm_calls.append((tag, chapter))
-            if (tag, chapter) in env.llm_fail:
-                raise LLMError(f"simulated LLM outage for {tag} chapter {chapter}")
-            hero = f"Hero{tag}{'ABCDEFGHIJ'[chapter]}"
+        def fake_extract_chapter(text, chapter_number):
+            tag = re.search(r"\[(\w+)\]", text).group(1)
+            env.extract_calls.append((tag, chapter_number))
+            if (tag, chapter_number) in env.extract_fail:
+                raise RuntimeError(f"simulated extraction failure for {tag} chapter {chapter_number}")
+            hero = f"Hero{tag}{'ABCDEFGHIJ'[chapter_number]}"
             shared = f"Shared{tag}"
-            return json.dumps({
+            return {
+                "chapter_number": chapter_number,
                 "entities": [
-                    {"mention": hero, "canonical_name": hero, "type": "character",
-                     "attributes": {"age": str(30 + chapter)}, "evidence": hero},
-                    {"mention": shared, "canonical_name": shared, "type": "character",
-                     "attributes": {"rank": f"Rank{chapter}"}, "evidence": shared},
+                    {"canonical_name": hero, "type": "character", "mention": hero, "aliases": [],
+                     "attributes": {"age": str(30 + chapter_number)}},
+                    {"canonical_name": shared, "type": "character", "mention": shared, "aliases": [],
+                     "attributes": {"rank": f"Rank{chapter_number}"}},
                 ],
-                "relationships": [
-                    {"subject": hero, "predicate": "KNOWS", "object": shared,
-                     "certainty": "DEFINITE", "evidence": "they know each other"},
-                ],
+                "relationships": [{"subject": hero, "predicate": "KNOWS", "object": shared}],
                 "events": [
-                    {"id": "e1", "type": "MEETING", "participants": [hero, shared],
-                     "location": None, "time_expression": None, "evidence": f"{hero} met {shared}"},
-                    {"id": "e2", "type": "TRAVEL", "participants": [hero],
-                     "location": None, "time_expression": None, "evidence": f"{hero} travelled"},
+                    {"id": "e1", "type": "MEETING", "participants": [hero, shared], "evidence": f"{hero} met {shared}"},
+                    {"id": "e2", "type": "TRAVEL", "participants": [hero], "evidence": f"{hero} travelled"},
                 ],
-                "state_changes": [],
                 "temporal_relations": [],
-            })
+            }
 
-        self.monkeypatch.setattr(llm_client, "generate", fake_generate)
+        self.monkeypatch.setattr(extractor, "extract_chapter", fake_extract_chapter)
 
         original = WorldStateService.integrate_extraction_result
 
@@ -177,3 +170,9 @@ class Phase1Env:
 @pytest.fixture
 def phase1_env(tmp_path, monkeypatch):
     return Phase1Env(tmp_path, monkeypatch)
+
+
+@pytest.fixture(autouse=True)
+def independent_of_env(monkeypatch, tmp_path):
+    """Uploaded files go to a temporary folder, not the running app's backend/storage."""
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "storage"))

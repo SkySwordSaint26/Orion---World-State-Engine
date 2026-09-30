@@ -30,7 +30,7 @@ def test_integration_does_not_commit_on_its_own(phase1_env):
 
 def test_successful_chapter_commits_all_expected_rows(phase1_env):
     env = phase1_env
-    env.install_fake_llm()
+    env.install_fake_extractor()
     data = env.make_world("A", chapters=1)
 
     result = env.execute(data["world_id"], data["job_id"], data["runs"][1])
@@ -45,7 +45,7 @@ def test_successful_chapter_commits_all_expected_rows(phase1_env):
 
 
 def _committed_two_chapter_world(env):
-    env.install_fake_llm()
+    env.install_fake_extractor()
     data = env.make_world("A", chapters=2)
     assert env.execute(data["world_id"], data["job_id"], data["runs"][1])["status"] == "success"
     return data

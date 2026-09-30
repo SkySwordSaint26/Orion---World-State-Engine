@@ -9,7 +9,7 @@ from app.workers.tasks.job_update_task import update_job_progress
 
 def test_failure_before_extraction_run_exists_fails_job_without_unbound_errors(phase1_env):
     env = phase1_env
-    env.install_fake_llm()
+    env.install_fake_extractor()
     data = env.make_world("A", chapters=1)
     bogus = {**data["runs"][1], "run_id": "does-not-exist"}
 
@@ -19,7 +19,7 @@ def test_failure_before_extraction_run_exists_fails_job_without_unbound_errors(p
     job = env.job(data["job_id"])
     assert job["status"] == "failed" and "not found" in job["error"] and job["completed_at"] is not None
     assert env.run(data["runs"][1]["run_id"])[0] == "pending"  # the real run was never touched
-    assert env.llm_calls == []
+    assert env.extract_calls == []
 
 
 def test_failure_when_neither_run_nor_job_exist_does_not_raise(phase1_env):
@@ -42,23 +42,23 @@ def test_failure_to_open_a_database_session_is_reported_not_raised(phase1_env, m
 
 def test_failure_during_extraction_marks_run_and_job_failed(phase1_env):
     env = phase1_env
-    env.install_fake_llm()
-    env.llm_fail.add(("A", 1))
+    env.install_fake_extractor()
+    env.extract_fail.add(("A", 1))
     data = env.make_world("A", chapters=1)
 
     result = env.execute(data["world_id"], data["job_id"], data["runs"][1])
 
     assert result["status"] == "failed"
     status, error = env.run(data["runs"][1]["run_id"])
-    assert status == "failed" and "simulated LLM outage" in error
+    assert status == "failed" and "simulated extraction failure" in error
     job = env.job(data["job_id"])
-    assert job["status"] == "failed" and "simulated LLM outage" in job["error"]
+    assert job["status"] == "failed" and "simulated extraction failure" in job["error"]
     assert job["completed"] == 0 and job["completed_at"] is not None
 
 
 def test_failure_during_integration_marks_run_and_job_failed(phase1_env, monkeypatch):
     env = phase1_env
-    env.install_fake_llm()
+    env.install_fake_extractor()
     monkeypatch.setattr(ConsistencyService, "run_checks", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("integration exploded")))
     data = env.make_world("A", chapters=1)
 
@@ -72,7 +72,7 @@ def test_failure_during_integration_marks_run_and_job_failed(phase1_env, monkeyp
 
 def test_success_marks_run_and_single_chapter_job_done(phase1_env):
     env = phase1_env
-    env.install_fake_llm()
+    env.install_fake_extractor()
     data = env.make_world("A", chapters=1)
 
     result = env.execute(data["world_id"], data["job_id"], data["runs"][1])
@@ -85,7 +85,7 @@ def test_success_marks_run_and_single_chapter_job_done(phase1_env):
 
 def test_multi_chapter_progress_is_a_recount_and_reaches_done_only_at_the_end(phase1_env):
     env = phase1_env
-    env.install_fake_llm()
+    env.install_fake_extractor()
     data = env.make_world("A", chapters=3)
     observed = []
     for chapter in (1, 2, 3):
@@ -103,8 +103,8 @@ def test_multi_chapter_progress_is_a_recount_and_reaches_done_only_at_the_end(ph
 
 def test_failed_middle_chapter_means_job_never_reports_done(phase1_env):
     env = phase1_env
-    env.install_fake_llm()
-    env.llm_fail.add(("A", 2))
+    env.install_fake_extractor()
+    env.extract_fail.add(("A", 2))
     data = env.make_world("A", chapters=3)
 
     assert env.execute(data["world_id"], data["job_id"], data["runs"][1])["status"] == "success"
@@ -118,7 +118,7 @@ def test_failed_middle_chapter_means_job_never_reports_done(phase1_env):
 
 def test_rerunning_a_finished_run_is_skipped_and_never_integrates_twice(phase1_env):
     env = phase1_env
-    env.install_fake_llm()
+    env.install_fake_extractor()
     data = env.make_world("A", chapters=1)
     assert env.execute(data["world_id"], data["job_id"], data["runs"][1])["status"] == "success"
     rows = env.world_rows(data["world_id"])
@@ -133,7 +133,7 @@ def test_rerunning_a_finished_run_is_skipped_and_never_integrates_twice(phase1_e
 
 def test_a_late_failure_after_commit_cannot_flip_a_done_run_to_failed(phase1_env, monkeypatch):
     env = phase1_env
-    env.install_fake_llm()
+    env.install_fake_extractor()
     data = env.make_world("A", chapters=1)
     monkeypatch.setattr(extraction_task, "update_job_progress", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("rollup broke")))
 
