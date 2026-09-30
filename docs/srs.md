@@ -287,8 +287,8 @@ Detects contradictions between different versions of the same fact (for example,
 
 - REQ-23: The system shall detect contradictions in a character's age across chapters.
 - REQ-24: The system shall detect contradictions in a character's location across chapters.
-- REQ-25: The system shall detect contradictions in relationships (for example, a character's stated father changing without explanation).
-- REQ-26: The system shall detect contradictions in a character's status (for example, marked as dead, then shown speaking later).
+- REQ-25: The system shall detect contradictions in relationships.
+- REQ-26: The system shall detect contradictions in a character's status .
 - REQ-27: Contradiction detection shall be based on defined rules and shall not rely on a language model to decide whether a contradiction exists.
 - REQ-28: Contradiction detection for a chapter shall complete within the time limit defined in Section 5.1.
 
