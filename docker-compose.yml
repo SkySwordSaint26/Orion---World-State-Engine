@@ -1,4 +1,5 @@
-version: '3.8'
+# `docker compose up` (or ./start.sh): Postgres, Redis and the frontend. The backend API runs on the host
+# (./start.sh), because extraction (extractor/, backend/app/pipeline/extractor.py) needs the GPU and its own venv.
 
 services:
   db:
@@ -10,7 +11,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=orion
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"          # this machine only: the password is the default one
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,58 +25,9 @@ services:
     container_name: orion_redis
     restart: always
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"          # this machine only: no password
     volumes:
       - redis_data:/data
-
-  backend_api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: orion_backend_api
-    restart: unless-stopped
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/orion
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - ENVIRONMENT=development
-      - EXTRACTION_EXECUTOR=celery
-      - STORAGE_DIR=/backend/storage
-    volumes:
-      - ./backend/app:/backend/app
-      - backend_storage:/backend/storage
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-
-  backend_worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: orion_backend_worker
-    restart: unless-stopped
-    command: celery -A app.workers.celery_app worker --loglevel=info -c 2
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/orion
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - ENVIRONMENT=development
-      - STORAGE_DIR=/backend/storage
-    volumes:
-      - ./backend/app:/backend/app
-      - backend_storage:/backend/storage
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
 
   frontend:
     build:
@@ -87,14 +39,11 @@ services:
       - "5173:5173"
     environment:
       - CHOKIDAR_USEPOLLING=true
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_BASE_URL=http://localhost:8000/api/v1   # read by src/api/client.ts; the browser calls it
     volumes:
       - ./Frontend:/app
       - /app/node_modules
-    depends_on:
-      - backend_api
 
 volumes:
   postgres_data:
   redis_data:
-  backend_storage:
