@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user_world
+from app.core.constants import FactStatus
 from app.models.world import World
 from app.schemas.entity import (
     EntityCreate, EntityUpdate, EntityResponse, EntityDetailResponse,
@@ -11,6 +12,13 @@ from app.schemas.entity import (
 from app.services.entity_service import EntityService
 
 router = APIRouter()
+
+def current_version(fact):
+    """The newest ACTIVE version (versions are newest first): a CONTRADICTED claim is kept but never shown as the
+    current value. Newest of any status only if none is active."""
+    return next((v for v in fact.versions if v.status == FactStatus.ACTIVE.value),
+                fact.versions[0] if fact.versions else None)
+
 
 @router.get("/{world_id}/entities", response_model=List[EntityResponse])
 def list_entities(
@@ -27,7 +35,7 @@ def list_entities(
         aliases = [a.alias for a in ent.aliases]
         facts_out = []
         for f in ent.facts:
-            active_v = f.versions[0] if f.versions else None
+            active_v = current_version(f)
             v_resp = None
             if active_v:
                 v_resp = FactVersionResponse(
@@ -108,7 +116,7 @@ def get_entity(
     aliases = [a.alias for a in ent.aliases]
     facts_out = []
     for f in ent.facts:
-        active_v = f.versions[0] if f.versions else None
+        active_v = current_version(f)
         v_resp = None
         if active_v:
             v_resp = FactVersionResponse(

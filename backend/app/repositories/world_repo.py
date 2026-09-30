@@ -6,6 +6,7 @@ from app.models.entity import Entity
 from app.models.relationship import Relationship
 from app.models.event import Event
 from app.models.contradiction import Contradiction
+from app.models.manuscript import Manuscript
 from app.repositories.base import BaseRepository
 
 class WorldRepository(BaseRepository[World]):
@@ -48,7 +49,10 @@ class WorldRepository(BaseRepository[World]):
             Contradiction.status == "DETECTED"
         ).count()
 
+        manuscripts_count = self.db.query(Manuscript).filter(Manuscript.world_id == world_id).count()
+
         return {
+            "manuscripts_count": manuscripts_count,
             "entities_count": entities_count,
             "characters_count": characters_count,
             "locations_count": locations_count,
