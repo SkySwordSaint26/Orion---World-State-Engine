@@ -1,6 +1,6 @@
-from wse import events as E
-from wse.evaluate import score
-from wse.pipeline import LISTS
+from extractor import events as E
+from extractor.evaluate import score
+from extractor.pipeline import LISTS
 
 TEXT = "I ran to the desk and called my boss. Noise."
 # word, lemma, POS, dependency, head token, BookNLP event flag

@@ -11,7 +11,7 @@ already computed by the coreference stage:
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.contracts.gold import EVENT_TYPES
-from wse.coref import booknlp_output
+from extractor.coref import booknlp_output
 
 LEXICON = {
     "CONVERSATION": "say tell ask answer reply respond speak talk call shout yell scream whisper mumble mutter croak "

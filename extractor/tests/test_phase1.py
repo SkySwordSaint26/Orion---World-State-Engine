@@ -1,5 +1,5 @@
-from wse.evaluate import coreference_b3, micro, score
-from wse.pipeline import LISTS, extract
+from extractor.evaluate import coreference_b3, micro, score
+from extractor.pipeline import LISTS, extract
 
 TEXT = "Alice met Bob. She saw Alice and Bob."
 
@@ -42,7 +42,7 @@ def test_pronouns_are_counted_but_never_scored():
 
 
 def test_an_empty_extraction_is_a_schema_valid_document(monkeypatch):
-    monkeypatch.setattr("wse.pipeline.STAGES", ())
+    monkeypatch.setattr("extractor.pipeline.STAGES", ())
     out = extract("story", TEXT)
     assert out["text"] == TEXT and all(out[k] == [] for k in LISTS)
 

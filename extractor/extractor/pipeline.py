@@ -4,12 +4,12 @@ from typing import Any, Callable, Dict, Tuple
 
 from app.contracts.gold import GOLD_SCHEMA_VERSION
 from app.evaluation.schema import load_schema, schema_errors
-from wse import coref as coref_module, llm, mentions as mentions_module
-from wse.coref import coref
-from wse.events import events
-from wse.mentions import mentions
-from wse.relations import relations
-from wse.temporal import temporal
+from extractor import coref as coref_module, llm, mentions as mentions_module
+from extractor.coref import coref
+from extractor.events import events
+from extractor.mentions import mentions
+from extractor.relations import relations
+from extractor.temporal import temporal
 
 _SCHEMA = load_schema()
 LISTS = tuple(k for k in _SCHEMA["required"] if _SCHEMA["properties"][k].get("type") == "array")
@@ -25,13 +25,14 @@ def release_encoders(doc: Dict[str, Any]) -> None:
 
 
 def release_llm(doc: Dict[str, Any]) -> None:
-    """...and hand the GPU back to the encoders for the next story (Ollama would keep the model for 5 minutes)."""
+    """...and hand the GPU back to the encoders for the next story (Ollama would keep the model for 5 minutes).
+    Also run first: another Ollama model (the backend's chat) may be holding the GPU."""
     llm.unload()
 
 
 # Each stage appends to the document's lists in place; stages are added phase by phase (see the plan).
-STAGES: Tuple[Callable[[Dict[str, Any]], None], ...] = (mentions, coref, events, temporal, release_encoders,
-                                                        relations, release_llm)
+STAGES: Tuple[Callable[[Dict[str, Any]], None], ...] = (release_llm, mentions, coref, events, temporal,
+                                                        release_encoders, relations, release_llm)
 
 
 def extract(story_id: str, text: str) -> Dict[str, Any]:

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
 
 from app.evaluation.score import align
-from wse.mentions import kind, spacy_nlp
+from extractor.mentions import kind, spacy_nlp
 
 Span = Tuple[int, int]
 PERSONAL = {"i", "me", "my", "mine", "myself", "we", "us", "our", "ours", "ourselves", "you", "your", "yours",
@@ -28,6 +28,7 @@ PERSONAL = {"i", "me", "my", "mine", "myself", "we", "us", "our", "ours", "ourse
             "theirs", "themselves"}
 BOOKNLP_MODELS = Path.home() / "booknlp_models"
 NAMING = re.compile(r"\b(?:[Mm]y|[Hh]is|[Hh]er|[Tt]heir|[Oo]ur|[Yy]our) name(?:\s+is|\s+was|['’]s)\s+")
+SELF_NAMING = re.compile(r"\b(?:[Tt]his is|I am|I['’]m)\s+")      # "This is Evelyn from 104.6 F.M.": the narrator
 
 
 # ---------------------------------------------------------------- backends: text -> clusters of character spans
@@ -108,13 +109,24 @@ def link(doc: Dict[str, Any], clusters: Sequence[Sequence[Span]]) -> None:
 
 
 def naming_links(doc: Dict[str, Any]) -> List[Tuple[str, str]]:
-    """(possessive pronoun, proper name) mention pairs for "my / his / her ... name is X"."""
+    """(pronoun, proper name) mention pairs for "my / his / her ... name is X", and (the narrator's "I", character
+    name) for "This is X" / "I'm X". The narrator is the cluster with the most "I" mentions.
+    ponytail: "I'm X" inside another speaker's quote links X to the narrator; check quote attribution if it misfires"""
     starts = {m["start"]: m for m in doc["mentions"]}
     links = []
     for match in NAMING.finditer(doc["text"]):
         owner, name = starts.get(match.start()), starts.get(match.end())
         if owner and name and owner["mention_kind"] == "pronominal" and name["mention_kind"] == "proper":
             links.append((owner["mention_id"], name["mention_id"]))
+    by_id = {m["mention_id"]: m for m in doc["mentions"]}
+    i_count = lambda c: sum(by_id[x]["text"].casefold() == "i" for x in c["mentions"])
+    narrator = max(doc["coreference_clusters"], key=i_count, default=None)
+    if narrator and i_count(narrator):
+        i_mention = next(x for x in narrator["mentions"] if by_id[x]["text"].casefold() == "i")
+        for match in SELF_NAMING.finditer(doc["text"]):
+            name = starts.get(match.end())
+            if name and name["mention_kind"] == "proper" and name["type"] == "character":
+                links.append((i_mention, name["mention_id"]))
     return links
 
 

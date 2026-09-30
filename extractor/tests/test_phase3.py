@@ -1,8 +1,8 @@
 import torch
 
-from wse.coref import link, merge, naming_links, strip_position_ids
-from wse.evaluate import coreference_b3
-from wse.pipeline import LISTS
+from extractor.coref import link, merge, naming_links, strip_position_ids
+from extractor.evaluate import coreference_b3
+from extractor.pipeline import LISTS
 
 
 def at(text, s, nth=0):
@@ -68,3 +68,10 @@ def test_a_name_introduced_with_my_name_is_joins_the_speaker():
     assert naming_links(d) == [("M1", "M2"), ("M4", "M5")]
     merge(d, naming_links(d))
     assert sorted(sorted(c["mentions"]) for c in d["coreference_clusters"]) == [["M1", "M2", "M3"], ["M4", "M5"]]
+
+
+def test_this_is_x_names_the_narrator():
+    t = "I work here. I sing. This is Evelyn from 104.6 F.M. This is Pinehaven."
+    ms = [mention(t, "M1", "I", "character", kind="pronominal"), mention(t, "M2", "I", "character", 1, "pronominal"),
+          mention(t, "M3", "Evelyn", "character", kind="proper"), mention(t, "M4", "Pinehaven", "location", kind="proper")]
+    assert naming_links(doc(t, ms, [["M1", "M2"]])) == [("M1", "M3")]

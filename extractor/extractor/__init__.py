@@ -1,4 +1,4 @@
-"""WSE extraction pipeline v2: story text -> `orion_gold_v1` document. Plan: docs/wse_extraction_plan.md.
+"""Extraction pipeline (formerly WSE, v2): story text -> `orion_gold_v1` document. Plan: docs/wse_extraction_plan.md.
 
 The backend's dependency-free modules (preprocessing, gold vocabularies, evaluation) are imported, never copied.
 """

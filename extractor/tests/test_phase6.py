@@ -1,5 +1,5 @@
-from wse import temporal as T
-from wse.pipeline import LISTS
+from extractor import temporal as T
+from extractor.pipeline import LISTS
 
 TEXT = "I left before he arrived. After leaving, I sat."
 # word, lemma, dependency, head token

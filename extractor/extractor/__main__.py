@@ -1,15 +1,18 @@
 """
-Command line (run from WSE/ with the WSE venv):
+Command line (run from extractor/ with its venv):
 
-    python -m wse predict --gold-dir GOLD --out-dir PRED
+    python -m extractor predict --gold-dir GOLD --out-dir PRED
         extracts every gold story's text -> PRED/<story_id>.json
 
-    python -m wse score GOLD PRED [--json OUT.json]
+    python -m extractor score GOLD PRED [--json OUT.json]
         per-story and micro-averaged scores (backend metrics + coreference B-cubed)
+
+    python -m extractor run IN.txt OUT.json [--story-id ID]
+        extracts one chapter's text -> OUT.json (the backend's extraction calls this)
 
 GOLD is produced by the backend converter (from backend/):
     python -m app.evaluation convert ../accounts_from_a_lonely_broadcast_station_orion_annotation/*.json \
-        --text-dir "../Accounts From a Lonely Broadcast Station" --out-dir ../WSE/data/gold
+        --text-dir "../Accounts From a Lonely Broadcast Station" --out-dir ../extractor/data/gold
 """
 import argparse
 import json
@@ -17,12 +20,16 @@ import sys
 import time
 from pathlib import Path
 
-from wse.evaluate import micro, score, table
-from wse.pipeline import LISTS, extract
+from extractor.evaluate import corrected, micro, score, table
+from extractor.pipeline import LISTS, extract
+
+CORRECTIONS = Path(__file__).resolve().parents[1] / "data" / "gold_corrections.json"
 
 
 def gold_docs(gold_dir: str):
-    return [(p, json.loads(p.read_text(encoding="utf-8"))) for p in sorted(Path(gold_dir).glob("*.json"))]
+    fixes = json.loads(CORRECTIONS.read_text(encoding="utf-8")) if CORRECTIONS.exists() else {}
+    return [(p, corrected(d, fixes.get(d["story_id"])))
+            for p in sorted(Path(gold_dir).glob("*.json")) for d in [json.loads(p.read_text(encoding="utf-8"))]]
 
 
 def cmd_predict(args: argparse.Namespace) -> int:
@@ -52,8 +59,14 @@ def cmd_score(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_run(args: argparse.Namespace) -> int:
+    doc = extract(args.story_id or Path(args.input).stem, Path(args.input).read_text(encoding="utf-8"))
+    Path(args.output).write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    return 0
+
+
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m wse", description=__doc__,
+    ap = argparse.ArgumentParser(prog="python -m extractor", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("predict")
@@ -63,8 +76,12 @@ def main(argv=None) -> int:
     s.add_argument("gold_dir")
     s.add_argument("pred_dir")
     s.add_argument("--json")
+    r = sub.add_parser("run")
+    r.add_argument("input")
+    r.add_argument("output")
+    r.add_argument("--story-id")
     args = ap.parse_args(argv)
-    return {"predict": cmd_predict, "score": cmd_score}[args.cmd](args)
+    return {"predict": cmd_predict, "score": cmd_score, "run": cmd_run}[args.cmd](args)
 
 
 if __name__ == "__main__":

@@ -20,10 +20,10 @@ Two additions:
                             "A FRIEND_OF B", "B CHILD_OF A" matches "A PARENT_OF B".
 """
 from collections import Counter
-from typing import Any, Dict, FrozenSet, List, Sequence, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Sequence, Tuple
 
 from app.evaluation.score import align, format_table, micro_average, prf, score_document
-from wse.relations import canonical
+from extractor.relations import canonical
 
 B3_KEYS = ("p_num", "p_den", "r_num", "r_den", "gold_missing")
 
@@ -98,6 +98,35 @@ def relationships_entity(pred: Dict[str, Any], scored: Dict[str, Any], gold: Dic
         pred_rels.add(canonical(s, r["predicate"], o) if s is not None and o is not None else ("unmatched", n))
     tp = len(pred_rels & gold_rels)
     return prf(tp, len(pred_rels) - tp, len(gold_rels) - tp)
+
+
+def corrected(gold: Dict[str, Any], fix: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """The gold with data/gold_corrections.json applied: its facts and relationships replace the converted ones, and
+    `merge` joins the clusters of mentions that are one entity. Entities are named by a gold mention's text."""
+    if not fix:
+        return gold
+    story = gold["story_id"]
+
+    def mention(name: str) -> str:
+        found = [m["mention_id"] for m in gold["mentions"] if m["text"].casefold() == name.casefold()]
+        if not found:
+            raise ValueError(f"{story}: gold_corrections names {name!r}, which is not the text of a gold mention")
+        return found[0]
+
+    for item in fix["facts"] + fix["relationships"]:
+        if item["evidence"] not in gold["text"]:
+            raise ValueError(f"{story}: evidence not in the text: {item['evidence']!r}")
+    clusters = [dict(c) for c in gold["coreference_clusters"]]
+    for names in fix.get("merge", []):
+        ids = {mention(n) for n in names}
+        group = [c for c in clusters if ids & set(c["mentions"])]
+        group[0]["mentions"] = sorted({m for c in group for m in c["mentions"]} | ids)
+        clusters = [c for c in clusters if c not in group[1:]]
+    facts = [{"fact_id": f"F{n}", "property": f["property"], "entity_mention_id": mention(f["entity"]),
+              "value": f["value"]} for n, f in enumerate(fix["facts"], 1)]
+    rels = [{"relationship_id": f"R{n}", "predicate": r["predicate"], "subject_mention_id": mention(r["subject"]),
+             "object_mention_id": mention(r["object"])} for n, r in enumerate(fix["relationships"], 1)]
+    return {**gold, "coreference_clusters": clusters, "facts": facts, "relationships": rels}
 
 
 def score(pred: Dict[str, Any], gold: Dict[str, Any]) -> Dict[str, Any]:

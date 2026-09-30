@@ -27,5 +27,10 @@ def generate(system: str, user: str, schema: Union[Dict[str, Any], str], num_pre
 
 
 def unload() -> None:
-    """Free the model's VRAM now instead of after Ollama's 5-minute keep-alive (the encoders need it back)."""
-    _post("generate", {"model": MODEL, "keep_alive": 0}, 60)
+    """Free the VRAM of every model Ollama has loaded, now instead of after its 5-minute keep-alive: the encoders
+    need it. Not only NuExtract: the backend's chat model (qwen2.5:7b, 4.7 GB) left loaded makes the encoders run
+    out of memory on the 6 GB GPU."""
+    with urllib.request.urlopen(f"{URL}/ps", timeout=10) as response:
+        loaded = [m["name"] for m in json.load(response).get("models", [])]
+    for name in loaded:
+        _post("generate", {"model": name, "keep_alive": 0}, 60)

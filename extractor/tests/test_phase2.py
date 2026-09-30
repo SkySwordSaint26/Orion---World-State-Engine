@@ -1,4 +1,4 @@
-from wse.mentions import build, spacy_nlp
+from extractor.mentions import build, spacy_nlp
 
 TEXT = "Dan left the old radio station. He took his phone."
 

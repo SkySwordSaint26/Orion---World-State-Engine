@@ -11,9 +11,9 @@ Phase 6 — temporal expressions and temporal relations, no LLM (docs/wse_extrac
 from typing import Any, Dict, Optional
 
 from app.contracts.gold import TEMPORAL_EXPRESSION_TYPES, TEMPORAL_RELATIONS
-from wse.coref import booknlp_output
-from wse.events import children
-from wse.mentions import best_type, gliner_spans
+from extractor.coref import booknlp_output
+from extractor.events import children
+from extractor.mentions import best_type, gliner_spans
 
 THRESHOLD = 0.5
 LABELS = {
