@@ -16,7 +16,8 @@ from app.repositories.contradiction_repo import ContradictionRepository
 from app.core.constants import FactStatus, RelationshipStatus
 from app.pipeline.resolution.fact_resolution import compare_fact_values
 from app.services.consistency_service import ConsistencyService
-from app.contracts.normalization import normalize_entity_name, normalize_predicate, normalize_property
+from app.contracts.normalization import (
+    is_proper_name, name_words, normalize_entity_name, normalize_predicate, normalize_property)
 from app.config.logging import get_logger
 
 logger = get_logger(__name__)
@@ -50,6 +51,25 @@ class WorldStateService:
 
     def delete_world(self, world_id: str) -> Optional[World]:
         return self.world_repo.delete(world_id)
+
+    def find_entity(self, world_id: str, names: List[str], entity_type: Optional[str] = None) -> Optional[Entity]:
+        """The stored entity one of `names` refers to. An exact name or alias wins; otherwise a short or full form
+        ("Mara" / "Mara Quinn") of exactly one stored entity of the same type. Role phrases ("mother") never match:
+        "her mother" in two chapters is rarely the same person."""
+        names = [n for n in names if is_proper_name(n)]
+        exact = next((e for n in names
+                      if (e := self.entity_repo.get_by_canonical(world_id, n) or self.entity_repo.get_by_alias(world_id, n))),
+                     None)
+        if exact or not names:
+            return exact
+        wanted = [name_words(n) for n in names]
+        # ponytail: scans every entity of the world per unmatched name; index the name words if worlds grow to thousands
+        candidates = [e for e in self.entity_repo.list_with_aliases(world_id)
+                      if (entity_type is None or e.entity_type == entity_type)
+                      and any(w <= s or s <= w for s in (name_words(n) for n in [e.canonical_name, *(a.alias for a in e.aliases)]
+                                                         if is_proper_name(n))
+                              for w in wanted)]
+        return candidates[0] if len(candidates) == 1 else None   # "Quinn" with three Quinns stored: ambiguous, no match
 
     def integrate_extraction_result(
         self,
@@ -86,16 +106,15 @@ class WorldStateService:
 
         # 1. Process Entities
         for ent_data in extraction_data.get("entities", []):
-            canonical = normalize_entity_name(ent_data.get("canonical_name", "").strip())  # pass-through hook (Phase 4)
+            canonical = normalize_entity_name(ent_data.get("canonical_name", "").strip())
             if not canonical:
                 continue
+            entity_type = ent_data.get("type", "unknown").lower()
 
             # Look up every name (canonical and aliases) against every stored name (canonical and aliases): a
             # chapter may call "Daniel" (alias "Dan") the entity stored as "Dan" (alias "Daniel").
             names = [canonical, *ent_data.get("aliases", [])]
-            existing_ent = next((e for n in names
-                                 if (e := self.entity_repo.get_by_canonical(world_id, n)
-                                     or self.entity_repo.get_by_alias(world_id, n))), None)
+            existing_ent = self.find_entity(world_id, names, entity_type)
 
             if existing_ent:
                 entity = existing_ent
@@ -107,7 +126,7 @@ class WorldStateService:
             else:
                 entity = self.entity_repo.create({
                     "world_id": world_id,
-                    "entity_type": ent_data.get("type", "unknown").lower(),
+                    "entity_type": entity_type,
                     "canonical_name": canonical,
                     "provenance": json.dumps(ent_data.get("source_chunk", ""))
                 }, commit=False)
@@ -117,7 +136,7 @@ class WorldStateService:
 
             entity_cache[canonical.lower()] = entity
             for alias in ent_data.get("aliases", []):
-                entity_cache[alias.lower()] = entity
+                entity_cache[normalize_entity_name(alias.strip()).lower()] = entity
 
             # Record mention
             mention_text = ent_data.get("mention") or canonical
@@ -172,13 +191,11 @@ class WorldStateService:
 
         # Helper for entity resolution from cache or DB
         def resolve_cached_entity(name_str: str) -> Optional[Entity]:
-            name_str = normalize_entity_name(name_str)  # pass-through hook (Phase 4)
-            norm = name_str.strip().lower()
-            if norm in entity_cache:
+            name_str = normalize_entity_name(name_str.strip())
+            norm = name_str.lower()
+            if norm in entity_cache:   # this chapter's entities, role phrases ("mother") included
                 return entity_cache[norm]
-            ent = self.entity_repo.get_by_canonical(world_id, name_str)
-            if not ent:
-                ent = self.entity_repo.get_by_alias(world_id, name_str)
+            ent = self.find_entity(world_id, [name_str])
             if ent:
                 entity_cache[norm] = ent
             return ent

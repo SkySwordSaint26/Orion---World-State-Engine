@@ -397,3 +397,40 @@ def test_full_integration_with_every_rule_firing_never_touches_an_llm(world, mon
     rules = sorted(c["explanation"].split("]")[0][1:] for c in contradictions(env, w["world_id"]))
     assert rules == ["AGE_MONOTONIC", "DEAD_THEN_ALIVE", "IMMUTABLE_FACT",
                      "RELATIONSHIP_INCOMPATIBLE", "RELATIONSHIP_SINGLE_SOURCE"]
+
+
+# ------------------------------------------------------------------- entity resolution
+def entity_names(env, world_id):
+    with env.Session() as s:
+        return sorted(e.canonical_name for e in s.query(Entity).filter_by(world_id=world_id))
+
+
+def test_short_names_and_titles_reach_the_full_name_so_rules_fire_across_chapters(world):
+    """The Gull Point e2e: "Mara" (ch 2) is "Mara Quinn" (ch 1), "Captain Brandt" is "Elias Brandt"."""
+    env, w = world
+    ch1 = [person("Mara Quinn", age="forty-one", eye_color="green"), person("Lily Quinn"),
+           person("Captain Elias Brandt", status="dead")]
+    integrate(env, w["world_id"], w["runs"][1], chapter_data(ch1))
+    ch2 = [person("Mara", age="thirty-eight", eye_color="grey"), person("Captain Brandt", status="alive and well")]
+    integrate(env, w["world_id"], w["runs"][2], chapter_data(ch2, [rel("Captain Brandt", "FRIEND_OF", "Mara")]))
+
+    assert entity_names(env, w["world_id"]) == ["Elias Brandt", "Lily Quinn", "Mara Quinn"]
+    rules = sorted(c["explanation"].split("]")[0][1:] for c in contradictions(env, w["world_id"]))
+    assert rules == ["AGE_MONOTONIC", "DEAD_THEN_ALIVE", "IMMUTABLE_FACT"]
+    assert rel_statuses(env, w["world_id"], "Elias Brandt", "Mara Quinn") == [("FRIEND_OF", "ACTIVE")]
+
+
+def test_ambiguous_short_names_and_role_words_are_never_merged(world):
+    env, w = world
+    ch1 = [person("Mara Quinn"), person("Lily Quinn"), person("mother")]
+    integrate(env, w["world_id"], w["runs"][1], chapter_data(ch1, [rel("mother", "PARENT_OF", "Mara Quinn")]))
+    ch2 = [person("Quinn"), person("mother"), person("Lily"), person("Mara's oldest friend")]
+    integrate(env, w["world_id"], w["runs"][2], chapter_data(ch2, [rel("mother", "PARENT_OF", "Lily")]))
+
+    # "Quinn" fits two people, so it is a new entity; each chapter's "mother" is its own person
+    assert entity_names(env, w["world_id"]) == ["Lily Quinn", "Mara Quinn", "Mara's oldest friend", "Quinn",
+                                                "mother", "mother"]
+    with env.Session() as s:
+        from app.models.relationship import Relationship
+        mothers = {e.id for e in s.query(Entity).filter_by(world_id=w["world_id"], canonical_name="mother")}
+        assert len({r.source_entity_id for r in s.query(Relationship).filter(Relationship.source_entity_id.in_(mothers))}) == 2

@@ -28,8 +28,8 @@ AGE_PROPERTY = "age"
 STATUS_PROPERTY = "status"
 
 # Status values that have a defined meaning for REQ-26. Any other status value is ignored.
-DEAD_STATUS_VALUES = frozenset({"dead", "deceased"})
-ALIVE_STATUS_VALUES = frozenset({"alive", "living"})
+DEAD_STATUS_VALUES = frozenset({"dead", "deceased", "died", "drowned", "killed", "murdered", "slain"})
+ALIVE_STATUS_VALUES = frozenset({"alive", "living", "alive and well", "still alive", "survived"})
 
 # Explicitly incompatible predicate pairs (order of the two predicates does not matter).
 # Carried over unchanged from the original implementation; "A KNOWS B" etc. are NOT in this set.

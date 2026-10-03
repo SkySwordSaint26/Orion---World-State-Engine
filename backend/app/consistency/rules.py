@@ -126,7 +126,7 @@ class DeadThenAliveRule(FactRule):
     """
     REQ-26 (status part): once a character's status is DEAD in an earlier chapter, a later chapter must
     not state them ALIVE (and the mirror case when a re-extracted earlier chapter says DEAD after a
-    later ALIVE). Only the controlled status values dead/deceased and alive/living participate.
+    later ALIVE). Only the controlled status values (vocab.DEAD_STATUS_VALUES / ALIVE_STATUS_VALUES) participate.
     """
     rule_id = "DEAD_THEN_ALIVE"
     confidence = 0.7
