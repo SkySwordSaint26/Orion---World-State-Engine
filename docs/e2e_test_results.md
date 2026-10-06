@@ -12,6 +12,10 @@
 > **Update, 6 October 2026: fixes 3 and 5 are done.** **All 5 contradictions are now found**, and 4 of the 5
 > planted relationships (was 0). Titles are saved as facts: Hanna is a doctor and Brandt is a Captain. See
 > [section 9](#9-re-run-after-the-relationship-and-title-fixes-6-october-2026).
+>
+> **Update, 6 October 2026 (later): the timeline (Failure 6) is fixed.** Brandt's death is now a DEATH event,
+> places are tagged as locations instead of people, and everyone in "Mara, Tobias and Lily" is listed. See
+> [section 10](#10-re-run-after-the-timeline-fixes-6-october-2026).
 
 ## The short version
 
@@ -359,3 +363,42 @@ B³ on linked mentions 0.744 → 0.755. Relationships (0.533) and facts (0.609) 
 - **A title is saved again in every chapter that uses it.** "Captain" for Brandt has 3 active versions with the
   same value, one per chapter. This is how the backend already stores a repeated value; it's harmless but untidy.
 - **Speed (Failure 7)** is deferred: correctness comes first for now.
+
+## 10. Re-run after the timeline fixes (6 October 2026)
+
+**What changed** (Failure 6):
+
+- **Stated deaths are events.** "Elias Brandt was dead." is now a DEATH event with Brandt as the one who died.
+  The extractor only looked at verbs before, and "was dead" has none. "was not dead" creates no event. "drowned"
+  and "perished" are also counted as deaths.
+- **Every participant has a role.** The extractor already knew who did what (agent), to whom (patient,
+  recipient) and where (location), but only the names reached the database, so everyone was saved as a
+  "PARTICIPANT" and places looked like people. The role is now saved, and the timeline API already returns it.
+- **People after "to", "at" and so on are not places.** "she said later *to Hanna*" makes Hanna the recipient.
+  "stared *at me*" makes the speaker a participant. Following the gold annotations, the goal of a movement
+  ("rushed over *to him*") stays a location, and so does an organization ("into *the radio station*").
+- **Lists of people.** "*Mara, Tobias and Lily* climbed the tower" lists all three, not just Mara.
+- **"Mara said nothing."** is no longer a CONVERSATION.
+
+| Timeline check | 30 Sep | 6 Oct |
+|---|---|---|
+| Brandt's death recorded | ❌ | ✅ DEATH [Elias Brandt: patient] |
+| "Mara travelled to Port Averly" | Port Averly listed as a person | ✅ Port Averly: location |
+| "she said later to Hanna" | — | ✅ Hanna: recipient |
+| "Mara, Tobias and Lily climbed" | Mara only | ✅ all three |
+| "Mara said nothing." | CONVERSATION | ✅ not an event |
+| Events with nobody attached | 5 of 15 | 3 of 15 |
+
+The 3 events with nobody attached are "The letter said ...", "His ship broke apart ..." and "the men from the
+harbor found his body". None of them has a named person, so leaving them empty is correct.
+
+**Gold stories:** no change (event triggers 0.243, event arguments 0.022, entity-level arguments 0.142). A first
+version made "rushed over to him" a recipient and lost one gold match, which is how the movement rule was found.
+
+**Still open:**
+
+- **"a stranger walked into the tavern"** (ch 4) is Brandt, but the text only says so in the next sentence, so
+  the event lists only Gull Point.
+- **"Hanna visited them"**: "them" (Lily and Tobias) is a plural pronoun, which coreference doesn't resolve.
+- **"The letter said ..."** is still a CONVERSATION. A letter saying something is reported speech, which is
+  debatable but harmless.
