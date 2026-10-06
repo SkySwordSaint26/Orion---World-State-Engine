@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 class ContradictionResponse(BaseModel):
@@ -18,7 +18,8 @@ class ContradictionResponse(BaseModel):
     event_id_a: Optional[str] = None
     event_id_b: Optional[str] = None
     created_at: datetime
-    metadata: Optional[Dict[str, Any]] = None
+    # No `metadata` field: on a SQLAlchemy model that name is the table registry (Base.metadata), not a column,
+    # so from_attributes read MetaData() and every list with a contradiction failed validation (HTTP 500).
 
 class ContradictionResolveRequest(BaseModel):
     status: str = "RESOLVED"

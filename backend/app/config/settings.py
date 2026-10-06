@@ -39,24 +39,16 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
 
-    # LLM Settings
+    # LLM Settings (chat only; extraction runs ../extractor, app/pipeline/extractor.py)
     LLM_PROVIDER: str = "ollama"  # ollama | openai | mock
     OLLAMA_URL: str = "http://localhost:11434/api/chat"
     OLLAMA_MODEL: str = "qwen2.5:7b"
-    # Extraction calls: Ollama's default context is 4096 tokens (prompts beyond it are truncated silently) and
-    # generation is unbounded (a looping answer runs into the request timeout).
-    OLLAMA_NUM_CTX: int = 8192
-    OLLAMA_NUM_PREDICT: int = 4096
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
 
     # Extraction execution: "celery" enqueues one ordered job task on the Celery worker (requires Redis);
     # "background" runs the same ordered job in-process via FastAPI BackgroundTasks (local dev, no Redis).
     EXTRACTION_EXECUTOR: str = "background"  # celery | background
-    EXTRACTION_PIPELINE: str = "monolithic"  # monolithic (one LLM call per chunk) | split (4 focused stages, Phase 7)
-    # Split pipeline only. False (default): any invalid item fails its stage. True: invalid items are dropped (each is
-    # logged with its reasons) and the stage fails only if it produced items and none of them is valid.
-    ALLOW_PARTIAL_STAGE: bool = False
 
     # File Storage
     STORAGE_DIR: str = "./storage"

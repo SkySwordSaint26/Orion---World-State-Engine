@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base
+from app.schemas.world import WorldStats
 from app.services.world_state_service import WorldStateService
 from app.services.entity_service import EntityService
 from app.services.consistency_service import ConsistencyService
@@ -34,7 +35,7 @@ def test_world_state_service(db_session):
     assert world.name == "Terra Nova"
 
     stats = service.get_world_stats(world.id)
-    assert stats["entities_count"] == 0
+    assert stats["entities_count"] == 0 and WorldStats(**stats).manuscripts_count == 0   # the API passes it through
 
 def test_entity_service(db_session):
     ws_service = WorldStateService(db_session)

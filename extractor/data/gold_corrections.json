@@ -1,0 +1,53 @@
+{
+  "_about": "Replaces the facts and relationships of the converted gold (data/gold/) per story, and merges gold clusters that are one entity. Entities are named by the text of a gold mention; every evidence quote must occur in the story. Drafted 2026-09-30 from the story texts; each change against the teammate annotation is listed under _changes. Needs human review.",
+  "accounts_from_a_lonely_broadcast_station_part_1": {
+    "_changes": "none: the annotation already covers the chapter",
+    "facts": [
+      {"entity": "Evelyn", "property": "age", "value": "twenty four", "evidence": "I’m twenty four and I have a degree in Journalism"},
+      {"entity": "Evelyn", "property": "occupation", "value": "radio DJ", "evidence": "I’m the only radio DJ working right now"},
+      {"entity": "Evelyn", "property": "location", "value": "the station", "evidence": "I also received a back room inside the station"}
+    ],
+    "relationships": [
+      {"subject": "Evelyn", "predicate": "WORKS_FOR", "object": "my boss", "evidence": "It was my boss on the other end"}
+    ]
+  },
+  "accounts_from_a_lonely_broadcast_station_part_2": {
+    "_changes": "added Daniel hair_color, Rose age, Daniel WORKS_FOR boss; Daniel location 'the station' -> 'the radio station' (the text's words); removed Evelyn occupation 'radio DJ' ('DJ' is not in this chapter)",
+    "facts": [
+      {"entity": "Daniel", "property": "occupation", "value": "part-timer", "evidence": "‘Dan will be your part-timer,’ my boss said."},
+      {"entity": "Daniel", "property": "location", "value": "the radio station", "evidence": "happening up here at the radio station"},
+      {"entity": "Daniel", "property": "hair_color", "value": "dark", "evidence": "his moppy dark hair flew back and forth"},
+      {"entity": "Rose", "property": "age", "value": "seventy", "evidence": "probably about seventy years old"}
+    ],
+    "relationships": [
+      {"subject": "Evelyn", "predicate": "WORKS_FOR", "object": "my boss", "evidence": "My boss dropped by during my second week here"},
+      {"subject": "Daniel", "predicate": "WORKS_FOR", "object": "my boss", "evidence": "‘Dan will be your part-timer,’ my boss said."}
+    ]
+  },
+  "accounts_from_a_lonely_broadcast_station_part_3": {
+    "_changes": "merged the Dan and Daniel clusters; added Dan status, Dan's mother PARENT_OF Dan; removed Evelyn occupation 'radio DJ' (not in this chapter) and Evelyn WORKS_FOR Dan (backwards: Dan is her part-timer, both work for the boss)",
+    "merge": [["Dan", "Daniel"]],
+    "facts": [
+      {"entity": "Dan", "property": "occupation", "value": "part-timer", "evidence": "So, I guess I’ve still got a part-timer."},
+      {"entity": "Dan", "property": "status", "value": "recovering", "evidence": "Dan got the surgery the morning after the ‘incident’ with his headset and is recovering"}
+    ],
+    "relationships": [
+      {"subject": "Dan’s mother", "predicate": "PARENT_OF", "object": "Dan", "evidence": "when I got the call from Dan’s mother"}
+    ]
+  },
+  "accounts_from_a_lonely_broadcast_station_part_4": {
+    "_changes": "added Daniel status and location, Evelyn and Daniel WORKS_FOR boss",
+    "facts": [
+      {"entity": "Jennifer Cook", "property": "age", "value": "25", "evidence": "A woman named Jennifer Cook, age 25"},
+      {"entity": "Jennifer Cook", "property": "status", "value": "missing", "evidence": "They say the missing girl, Jennifer"},
+      {"entity": "Jennifer Cook", "property": "status", "value": "in extreme danger", "evidence": "her status, for whatever reason, had been listed as ‘in extreme danger’"},
+      {"entity": "Daniel", "property": "status", "value": "recovering", "evidence": "still recovering but plenty well enough to pester me"},
+      {"entity": "Daniel", "property": "location", "value": "the station", "evidence": "he joined me to announce his return to the station"}
+    ],
+    "relationships": [
+      {"subject": "Evelyn", "predicate": "FRIEND_OF", "object": "Jennifer Cook", "evidence": "I recognize her name. We were friends in college"},
+      {"subject": "Evelyn", "predicate": "WORKS_FOR", "object": "boss", "evidence": "Why would our boss delete that"},
+      {"subject": "Daniel", "predicate": "WORKS_FOR", "object": "boss", "evidence": "Why would our boss delete that"}
+    ]
+  }
+}

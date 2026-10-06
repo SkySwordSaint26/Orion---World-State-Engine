@@ -1,160 +1,101 @@
-import os
-from pathlib import Path
-from typing import Dict, Any, List, Optional
+"""
+Extract a chapter with the extraction pipeline (../extractor, docs/wse_extraction_plan.md) and hand the
+integration the plain dict it accepts (entities by name with their facts, relationships, events).
 
-from app.contracts import ContractError, ExtractionResult, ExtractorInput, extract_observations, validate_result
-from app.contracts.mapping import (
-    legacy_entities, legacy_events, legacy_relationships, legacy_state_changes, legacy_temporal_relations,
-)
-from app.config.settings import settings
-from app.pipeline.llm_client import llm_client
-from app.pipeline.stages import IdCounters, StageError, extract_chunk_split
-from app.pipeline.parsers.extraction_parser import parse_and_validate_extraction
-from app.pipeline.resolution.entity_resolution import cluster_mentions
-from app.preprocessing import chunk_document, preprocess_chapter
+The pipeline runs in its own Python 3.12 venv with torch and the GPU, so it is called as a subprocess
+(`python -m extractor run IN.txt OUT.json`) and returns an orion_gold_v1 document. It resolves mentions and
+coreference within the chapter; entities join earlier chapters by name and alias (WorldStateService).
+"""
+import json
+import subprocess
+import tempfile
+from collections import Counter
+from pathlib import Path
+from typing import Any, Dict, List
+
 from app.config.logging import get_logger
+from app.preprocessing import preprocess_chapter
 
 logger = get_logger(__name__)
 
-PROMPT_FILE = Path(__file__).parent / "prompts" / "extraction_prompt.txt"
-
-def load_system_prompt() -> str:
-    if PROMPT_FILE.exists():
-        with open(PROMPT_FILE, "r", encoding="utf-8") as f:
-            return f.read()
-    return "Extract structured entities, relationships, and events into strict JSON."
-
-
-class ExtractionError(RuntimeError):
-    """Raised when a chunk's LLM output cannot be parsed at all (not merely partially invalid)."""
+EXTRACTOR_DIR = Path(__file__).resolve().parents[3] / "extractor"
+EXTRACTOR_PYTHON = EXTRACTOR_DIR / ".venv" / "bin" / "python"
+TIMEOUT_S = 900                                   # about 40 s per chapter on the RTX 4050, most of it model loading
+ENTITY_TYPES = ("character", "location", "organization")
+# ponytail: OTHER events (85% of the extractor's triggers, mostly noise) are left out of the world state; keep them if the
+# timeline needs every verb
+SKIP_EVENT_TYPES = {"OTHER"}
 
 
-# Extraction input size. Chunks are built from whole sentences (see app/preprocessing); the overlap is
-# counted in sentences (roughly the old 400 characters).
-CHUNK_MAX_CHARS = 8000
-CHUNK_OVERLAP_SENTENCES = 2
+def run_extractor(text: str, chapter_number: int) -> Dict[str, Any]:
+    """Chapter text -> the extractor's gold document. Raises on any failure (the chapter then fails, nothing is stored)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src, out = Path(tmp) / "chapter.txt", Path(tmp) / "chapter.json"
+        src.write_text(text, encoding="utf-8")
+        done = subprocess.run([str(EXTRACTOR_PYTHON), "-m", "extractor", "run", str(src), str(out),
+                               "--story-id", f"chapter_{chapter_number}"],
+                              cwd=EXTRACTOR_DIR, capture_output=True, text=True, timeout=TIMEOUT_S)
+        if done.returncode != 0:
+            raise RuntimeError(f"Extraction failed on chapter {chapter_number}: {done.stderr.strip()[-2000:]}")
+        return json.loads(out.read_text(encoding="utf-8"))
 
 
-PIPELINES = ("monolithic", "split")
+def to_legacy(doc: Dict[str, Any], chapter_number: int) -> Dict[str, Any]:
+    """The extractor's gold document -> the integration's dict. One entity per coreference cluster (or unclustered mention)
+    of a character / location / organization type that has a proper name, or that a fact or relationship is about
+    ("boss", "Dan’s mother"). Its name is its most frequent proper name (else nominal), the shorter on a tie since
+    chapters mostly use the short form; other proper names are aliases, which is how later chapters find it."""
+    mentions = {m["mention_id"]: m for m in doc["mentions"]}
+    groups: List[List[Dict[str, Any]]] = [[mentions[i] for i in c["mentions"]] for c in doc["coreference_clusters"]]
+    clustered = {i for c in doc["coreference_clusters"] for i in c["mentions"]}
+    groups += [[m] for i, m in mentions.items() if i not in clustered]
+    group_of = {m["mention_id"]: n for n, g in enumerate(groups) for m in g}
+    about = {group_of[f["entity_mention_id"]] for f in doc["facts"]}
+    about |= {group_of[r[k]] for r in doc["relationships"] for k in ("subject_mention_id", "object_mention_id")}
+
+    names: Dict[int, str] = {}
+    by_name: Dict[str, Dict[str, Any]] = {}                        # groups with the same name are one entity
+    for n, g in enumerate(groups):
+        kind = Counter(m["type"] for m in g).most_common(1)[0][0]
+        proper = Counter(m["text"] for m in g if m.get("mention_kind") == "proper")
+        nominal = Counter(m["text"] for m in g if m.get("mention_kind") == "nominal")
+        if kind not in ENTITY_TYPES or not (proper or (n in about and nominal)):
+            continue
+        name = max((proper or nominal).items(), key=lambda kv: (kv[1], -len(kv[0])))[0]   # tie: the shorter name
+        names[n] = name
+        entity = by_name.setdefault(name, {"canonical_name": name, "type": kind, "mention": name, "aliases": [],
+                                           "attributes": {}})
+        entity["aliases"] = sorted(set(entity["aliases"]) | set(proper) - {name})
+    for f in doc["facts"]:
+        name = names.get(group_of[f["entity_mention_id"]])
+        if name:                                                  # one value per property and chapter: the first
+            by_name[name]["attributes"].setdefault(f["property"], f["value"])
+
+    relationships = [{"subject": names[s], "predicate": r["predicate"], "object": names[o]}
+                     for r in doc["relationships"]
+                     if (s := group_of[r["subject_mention_id"]]) in names and (o := group_of[r["object_mention_id"]]) in names]
+
+    sentences = list(preprocess_chapter(doc["text"]).iter_sentences())
+    sentence_at = lambda i: next((s.text for s in sentences if s.start <= i < s.end), "")
+    events = []
+    for e in doc["events"]:
+        if e["type"] in SKIP_EVENT_TYPES:
+            continue
+        people = [(names[g], p["role"].upper()) for p in e["participants"]
+                  if (g := group_of.get(p["mention_id"])) in names]
+        events.append({"id": e["event_id"], "type": e["type"], "evidence": sentence_at(e["start"]),
+                       "participants": [{"name": n, "role": r} for n, r in dict.fromkeys(people)]})
+    kept = {e["id"] for e in events}
+    temporal = [{"event_1": t["source_event_id"], "relation": t["relation"], "event_2": t["target_event_id"]}
+                for t in doc["temporal_relations"] if {t["source_event_id"], t["target_event_id"]} <= kept]
+    return {"chapter_number": chapter_number, "pipeline": "extractor", "entities": list(by_name.values()),
+            "relationships": relationships, "events": events, "temporal_relations": temporal}
 
 
-class ExtractionOrchestrator:
-    def __init__(self, pipeline: Optional[str] = None):
-        self.system_prompt = load_system_prompt()
-        self._pipeline = pipeline  # None = read settings.EXTRACTION_PIPELINE on every call
-
-    @property
-    def pipeline(self) -> str:
-        mode = (self._pipeline or settings.EXTRACTION_PIPELINE or "monolithic").strip().lower()
-        if mode not in PIPELINES:
-            raise ExtractionError(f"Unknown EXTRACTION_PIPELINE {mode!r}; expected one of {list(PIPELINES)}")
-        return mode
-
-    def extract_chapter(
-        self,
-        chapter_text: str,
-        chapter_number: int = 1,
-        progress_callback: Optional[Any] = None
-    ) -> Dict[str, Any]:
-        """
-        Processes a full chapter's text: chunks it, sends to LLM, parses,
-        and aggregates entities, relationships, and events.
-        """
-        # Deterministic preprocessing (no LLM): paragraphs -> sentences with exact offsets -> sentence-aligned
-        # chunks. chunk.text == chapter_text[chunk.start:chunk.end], so every extracted item can be traced
-        # back to an exact span of the chapter.
-        document = preprocess_chapter(chapter_text)
-        chunks = chunk_document(document, max_chars=CHUNK_MAX_CHARS, overlap_sentences=CHUNK_OVERLAP_SENTENCES)
-        logger.info(
-            f"Chapter {chapter_number}: {len(document.paragraphs)} paragraphs, {len(document.sentences)} sentences, "
-            f"{len(chunks)} chunks for extraction."
-        )
-
-        result = ExtractionResult(chapter_number=chapter_number)
-        mode = self.pipeline
-        split_ids = IdCounters()
-
-        for idx, chunk in enumerate(chunks):
-            if mode == "split":
-                # Phase 7: four focused, independently validated stages instead of one monolithic call.
-                try:
-                    chunk_result = extract_chunk_split(chunk, document, split_ids, chapter_number)
-                    validate_result(chunk_result, document)
-                except (StageError, ContractError) as exc:
-                    raise ExtractionError(
-                        f"Chapter {chapter_number}, chunk {idx + 1}/{len(chunks)}: split extraction failed: {exc}"
-                    ) from exc
-                result = result.merge(chunk_result)
-                if progress_callback:
-                    progress_callback(idx + 1, len(chunks))
-                continue
-
-            chunk_prompt = (
-                f"Extract structured world state information from the following passage.\n\n"
-                f"CHUNK [{idx + 1}/{len(chunks)}]:\n"
-                f"-----------------------------------------\n"
-                f"{chunk.text}\n"
-                f"-----------------------------------------\n"
-                f"Output strictly valid JSON matching the instructions."
-            )
-
-            raw_output = llm_client.generate(
-                prompt=chunk_prompt,
-                system_prompt=self.system_prompt,
-                json_mode=True,
-                temperature=0.0
-            )
-
-            parsed, errors = parse_and_validate_extraction(raw_output)
-            if errors:
-                # The parser only reports errors when the output is unusable as a whole
-                # (invalid JSON / not an object). Treating that as an empty chunk would let a
-                # chapter finish "successfully" with silently missing data.
-                raise ExtractionError(
-                    f"Chapter {chapter_number}, chunk {idx + 1}/{len(chunks)}: unusable LLM output: {errors}"
-                )
-
-            # Phase 4: wrap the parsed output into typed observations (span + sentence ids propagated from
-            # the chunk) and validate them at this boundary; invalid output fails the chapter early.
-            try:
-                chunk_result = extract_observations(
-                    ExtractorInput(document=document, chunk=chunk, chapter_number=chapter_number), parsed)
-            except ContractError as exc:
-                raise ExtractionError(
-                    f"Chapter {chapter_number}, chunk {idx + 1}/{len(chunks)}: extraction contract violated: {exc}"
-                ) from exc
-            result = result.merge(chunk_result)
-
-            if progress_callback:
-                progress_callback(idx + 1, len(chunks))
-
-        # The legacy dict shape below is unchanged; it is now derived from the observations.
-        all_raw_entities = legacy_entities(result)
-
-        # Cluster duplicate entities across chunks
-        clustered_entities = cluster_mentions(all_raw_entities)
-
-        return {
-            "chapter_number": chapter_number,
-            "pipeline": mode,
-            "entities": clustered_entities,
-            "raw_mentions": all_raw_entities,
-            "relationships": legacy_relationships(result),
-            "events": legacy_events(result),
-            "state_changes": legacy_state_changes(result),
-            "temporal_relations": legacy_temporal_relations(result),
-            "observations": result,
-            "document": document,  # Phase 5: entity resolution needs paragraphs/sentences (in-memory only)
-            "preprocessing": {
-                "paragraphs": len(document.paragraphs),
-                "sentences": len(document.sentences),
-                "chunks": [
-                    {"id": c.id, "start": c.start, "end": c.end, "sentence_ids": list(c.sentence_ids),
-                     "overlap_sentence_ids": list(c.overlap_sentence_ids)}
-                    for c in chunks
-                ],
-            },
-        }
-
-# Global instance
-orchestrator = ExtractionOrchestrator()
+def extract_chapter(text: str, chapter_number: int) -> Dict[str, Any]:
+    doc = run_extractor(text, chapter_number)
+    result = to_legacy(doc, chapter_number)
+    logger.info(f"Extractor chapter {chapter_number}: {len(result['entities'])} entities, "
+                f"{sum(len(e['attributes']) for e in result['entities'])} facts, "
+                f"{len(result['relationships'])} relationships, {len(result['events'])} events")
+    return result

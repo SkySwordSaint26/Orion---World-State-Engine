@@ -6,13 +6,11 @@ import type {
   Contradiction, 
   Manuscript 
 } from '../data/mockData';
-import { 
-  initialWorlds, 
-  initialEntities, 
-  initialTimelineEvents, 
-  initialContradictions 
-} from '../data/mockData';
 import { apiFetch } from '../api/client';
+
+// Everything shown comes from the API: no sample data, and a failed or empty fetch shows nothing rather than
+// something invented (the demo must show what extraction actually produced).
+const titleCase = (code: string) => code.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
 interface WorldState {
   worlds: World[];
@@ -66,17 +64,17 @@ interface WorldState {
 }
 
 export const useWorldStore = create<WorldState>((set, get) => ({
-  worlds: initialWorlds,
-  entities: initialEntities,
-  timelineEvents: initialTimelineEvents,
-  contradictions: initialContradictions,
+  worlds: [],
+  entities: [],
+  timelineEvents: [],
+  contradictions: [],
   manuscripts: [],
   
-  activeWorldId: 'terra-incognita',
+  activeWorldId: null,
   activeManuscriptId: null,
   activeChapterId: null,
   activeEntityId: null,
-  activeTimelineEventId: 'tle-2',
+  activeTimelineEventId: null,
   
   isEntityPanelOpen: false,
   
@@ -85,9 +83,12 @@ export const useWorldStore = create<WorldState>((set, get) => ({
     activeManuscriptId: null,
     activeChapterId: null,
     activeEntityId: null,
-    activeTimelineEventId: id === 'terra-incognita' ? 'tle-2' : null,
+    activeTimelineEventId: null,
     isEntityPanelOpen: false,
-    manuscripts: []
+    manuscripts: [],
+    entities: [],                     // never show the previous world's data while this one loads
+    timelineEvents: [],
+    contradictions: []
   }),
   
   setActiveManuscript: (id) => set((state) => {
@@ -143,7 +144,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
         id: ent.id,
         name: ent.canonical_name,
         type: ent.entity_type as any,
-        description: ent.provenance || 'Entity record in world archive.',
+        description: (ent.aliases || []).length ? `Also called: ${ent.aliases.join(', ')}` : '',
         facts: (ent.facts || []).map((f: any) => ({
           id: f.id,
           text: `${f.property_name}: ${f.current_version?.value ?? ''}`,
@@ -154,61 +155,50 @@ export const useWorldStore = create<WorldState>((set, get) => ({
         appearances: []
       }));
 
-      set({ entities: mapped.length > 0 ? mapped : initialEntities });
+      set({ entities: mapped });
     } catch (e) {
-      console.warn("Could not fetch entities from API, keeping current entities", e);
+      console.error("Could not fetch entities from API", e);
     }
   },
 
   fetchTimelineForWorld: async (worldId: string) => {
     try {
       const data = await apiFetch<any>(`/worlds/${worldId}/timeline`);
-      if (data && data.events && data.events.length > 0) {
-        const mapped: TimelineEvent[] = data.events.map((ev: any, idx: number) => ({
-          id: ev.id || `tle-${idx}`,
-          year: ev.sequence_number || ev.year || idx * 5 + 10,
-          period: ev.period || 'Recorded Chronicle',
-          title: ev.title || ev.event_type || 'World Event',
-          description: ev.description || '',
-          stateChanges: (ev.state_changes || []).map((sc: any) => ({
-            entityId: sc.entity_id || '',
-            entityName: sc.entity_name || 'Entity',
-            entityType: 'character',
-            field: sc.property_name || 'State',
-            before: sc.old_value || 'Previous',
-            after: sc.new_value || 'Current'
-          })),
-          chapters: []
-        }));
-        set({ timelineEvents: mapped });
-      }
+      const mapped: TimelineEvent[] = (data?.events || []).map((ev: any) => ({
+        id: ev.id,
+        year: ev.chapter_number ?? 0,           // the backend orders by chapter; there are no in-story years
+        period: (ev.participants || []).map((p: any) => p.entity_name).filter(Boolean).join(', ') || 'No participants',
+        title: titleCase(ev.event_type || 'EVENT'),
+        description: ev.description || '',
+        stateChanges: [],
+        chapters: []
+      }));
+      set({ timelineEvents: mapped });
     } catch (e) {
-      console.warn("Could not fetch timeline from API, using fallback", e);
+      console.error("Could not fetch timeline from API", e);
     }
   },
 
   fetchContradictionsForWorld: async (worldId: string) => {
     try {
       const data = await apiFetch<any[]>(`/worlds/${worldId}/contradictions`);
-      if (data && data.length > 0) {
-        const mapped: Contradiction[] = data.map((c: any) => ({
+      // explanation = "[RULE_ID] what the rule found" (app/consistency); confidence is the rule's own
+      const mapped: Contradiction[] = (data || []).map((c: any) => {
+        const [, rule = c.contradiction_type, text = c.explanation] = /^\[(\w+)\]\s*(.*)$/s.exec(c.explanation || '') || [];
+        return {
           id: c.id,
-          title: c.title || `Conflict in ${c.target_entity_name || 'Lore'}`,
-          category: c.category || 'Lore Consistency',
-          targetEntityId: c.entity_id || '',
-          severity: c.severity || 'medium',
-          summary: c.description || c.summary || 'Detected contradiction in world state.',
+          title: titleCase(rule || 'CONTRADICTION'),
+          category: titleCase(c.contradiction_type || ''),
+          targetEntityId: '',
+          severity: c.confidence >= 0.85 ? 'high' : c.confidence >= 0.6 ? 'medium' : 'low',
+          summary: text || '',
           resolved: c.status === 'RESOLVED',
-          sources: (c.sources || []).map((s: any) => ({
-            sourceName: s.source_name || 'Manuscript',
-            text: s.text || '',
-            highlightedWord: s.highlight || ''
-          }))
-        }));
-        set({ contradictions: mapped });
-      }
+          sources: []
+        };
+      });
+      set({ contradictions: mapped });
     } catch (e) {
-      console.warn("Could not fetch contradictions from API, using fallback", e);
+      console.error("Could not fetch contradictions from API", e);
     }
   },
 
@@ -218,10 +208,10 @@ export const useWorldStore = create<WorldState>((set, get) => ({
         method: 'POST',
         body: JSON.stringify({ status: 'RESOLVED' })
       });
+      get().resolveContradiction(contradictionId);   // only once the backend has it
     } catch (e) {
-      console.warn("Backend resolve call deferred/mocked", e);
+      console.error("Could not resolve the contradiction on the API", e);
     }
-    get().resolveContradiction(contradictionId);
   },
   
   addEntity: async (entityData) => {
@@ -235,21 +225,21 @@ export const useWorldStore = create<WorldState>((set, get) => ({
       appearances: []
     };
 
-    if (activeWorldId && !activeWorldId.startsWith('terra-') && !activeWorldId.startsWith('sundered-') && !activeWorldId.startsWith('neo-')) {
-      try {
-        const res = await apiFetch<any>(`/worlds/${activeWorldId}/entities`, {
-          method: 'POST',
-          body: JSON.stringify({
-            canonical_name: entityData.name,
-            entity_type: entityData.type,
-            aliases: entityData.alias ? [entityData.alias] : [],
-            attributes: { description: entityData.description, subtype: entityData.subtype }
-          })
-        });
-        createdEntity.id = res.id;
-      } catch (err) {
-        console.warn("Failed to create entity on API, adding locally", err);
-      }
+    if (!activeWorldId) return;                      // nowhere to save it
+    try {
+      const res = await apiFetch<any>(`/worlds/${activeWorldId}/entities`, {
+        method: 'POST',
+        body: JSON.stringify({
+          canonical_name: entityData.name,
+          entity_type: entityData.type,
+          aliases: entityData.alias ? [entityData.alias] : [],
+          attributes: { description: entityData.description, subtype: entityData.subtype }
+        })
+      });
+      createdEntity.id = res.id;
+    } catch (err) {
+      console.error("Failed to create entity on API; not added", err);
+      return;                                        // a local-only entity would look saved but isn't
     }
 
     set((state) => {
@@ -415,7 +405,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
               number: ch.chapter_number,
               title: ch.title,
               content: ch.content || '',
-              wordCount: ch.word_count || 1200
+              wordCount: ch.word_count ?? (ch.content ? ch.content.trim().split(/\s+/).length : 0)
             }));
           } catch (_) {}
 

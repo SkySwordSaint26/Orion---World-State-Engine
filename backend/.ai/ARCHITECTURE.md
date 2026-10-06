@@ -131,14 +131,10 @@ sequenceDiagram
 - Specialized repositories encapsulate complex joins and query optimizations (e.g. `get_entity_with_facts` with `joinedload`).
 
 ### Layer 4: Pipeline Layer (`app/pipeline/`)
-- **`llm_client.py`**: Unified interface supporting local Ollama (`/api/chat`), OpenAI API, and an offline heuristic Mock provider. The provider is exactly what `LLM_PROVIDER` says: a provider failure raises `LLMError` (the run fails) and there is no automatic fallback; the mock engine runs only with `LLM_PROVIDER=mock`, and logs a warning when it does.
-- **`app/preprocessing/`** (Phase 3, deterministic, no LLM): paragraph/sentence segmentation with exact offsets and sentence-aligned chunking. Reference: [`context/pipeline_deep_dive.md`](context/pipeline_deep_dive.md).
-- **`app/contracts/`** (Phase 4, no LLM, no DB): typed stage contracts (`EntityMention`, `Relationship`, `Event`, `FactObservation`, `TemporalRelation`, `ExtractionResult`), the `Observation` base with span/sentence-id provenance, boundary validation, and pass-through normalization hooks. Reference: [`context/pipeline_deep_dive.md`](context/pipeline_deep_dive.md) §1b.
-- **`app/resolution/`** (Phase 5, no LLM, no DB): deterministic mention -> entity resolution (exact / normalized / alias / minimal pronoun / new), unresolved-when-ambiguous. Used by `WorldStateService` through `EntityResolutionService`. Reference: [`context/pipeline_deep_dive.md`](context/pipeline_deep_dive.md) §1c.
-- **`app/coreference/`** (Phase 6, no LLM, no DB): high-precision mention clusters (same entity / resolved pronoun / exact text, never ambiguous mentions) and cluster-based entity grounding for relationships, events and facts. Reference: [`context/pipeline_deep_dive.md`](context/pipeline_deep_dive.md) §1d.
-- **`stages/`** (Phase 7, opt-in via `EXTRACTION_PIPELINE=split`): four focused LLM stages (entities, relationships, events, facts), each strictly validated, with sentence-level provenance and explicit mention references. Reference: [`context/pipeline_deep_dive.md`](context/pipeline_deep_dive.md) §1e.
-- **`parsers/extraction_parser.py`**: Strips markdown fences, fixes trailing commas, validates entity/relationship/event structures.
-- **`resolution/entity_resolution.py`**: Computes Jaccard word token similarity and substring containment to cluster ambiguous mentions to canonical entities.
+- **`extractor.py`**: the only extractor. Runs `../extractor` (encoder models + NuExtract, its own Python 3.12 venv and the GPU) as a subprocess per chapter and turns its orion_gold_v1 document into the dict `WorldStateService` integrates (entities by name with aliases and facts, relationships, events, temporal relations). An extraction failure fails the chapter run.
+- **`llm_client.py`**: chat only (`ChatService`): local Ollama or OpenAI, with a canned answer when both fail or `LLM_PROVIDER=mock`.
+- **`app/preprocessing/`** (deterministic, no LLM): paragraph/sentence segmentation with exact offsets and sentence-aligned chunking, used by ../extractor and `extractor.py`.
+- **`app/contracts/`**: the gold-schema vocabularies (`gold.py`, used by ../extractor) and pass-through normalization hooks.
 - **`resolution/fact_resolution.py`, `resolution/relationship_resolution.py`**: thin compatibility wrappers over the rule engine in `app/consistency/` (`resolve_fact_update`, `resolve_relationship_update`); integration itself calls `ConsistencyService`, which runs the deterministic `ConsistencyEngine`.
 - **`app/consistency/`** (Layer 4b): controlled vocabulary, small independent rules, the LLM-free `ConsistencyEngine`, and the `ContradictionRecorder` (flush-only persistence with deduplication). Reference: [`context/consistency_engine.md`](context/consistency_engine.md).
 
@@ -160,7 +156,7 @@ sequenceDiagram
 **NOT IMPLEMENTED YET (planned future architecture, later phases)**
 - Property, relationship and temporal **normalization** (not implemented; the rule engine currently sees raw stored names, direction-keyed relationships and single-chapter temporal data). Known limitations and their code markers: [`context/consistency_engine.md`](context/consistency_engine.md#known-limitations-read-before-relying-on-the-results).
 - Consistency rules that are DEFERRED (location clashes REQ-24, speaking/acting after death REQ-26) because the frozen schema and current extraction contract cannot represent the required information. The implemented rules are listed in [`context/consistency_engine.md`](context/consistency_engine.md).
-- The multi-stage extraction pipeline (mention detection, coreference, world-aware entity resolution, separate event/relationship/attribute stages). Extraction is still the single monolithic prompt.
+- World-aware entity resolution across chapters: ../extractor resolves mentions within a chapter; entities join earlier chapters by exact name or alias only.
 - Deferred retry when an edit is submitted while earlier chapters of another job are still pending (it currently fails with a "blocked by" message and can be re-run).
 
 ---

@@ -7,7 +7,7 @@ import pytest
 
 from app.evaluation import convert_annotation, micro_average, schema_errors, score_document, span_problem
 from app.evaluation.__main__ import main
-from app.evaluation.schema import SCHEMA_PATH
+from app.evaluation.schema import SCHEMA_PATH, load_schema
 
 pytestmark = pytest.mark.skipif(not SCHEMA_PATH.exists(), reason="orion_gold_v1.schema.json not present")
 
@@ -231,52 +231,20 @@ def test_cli_convert_then_score_round_trip(tmp_path, capsys):
     assert json.loads((tmp_path / "s.json").read_text())["micro"]["mentions_exact"]["fn"] == 5
 
 
-def test_cli_predict_writes_an_empty_prediction_when_extraction_fails(tmp_path, monkeypatch):
-    from app.pipeline import extractor
-    def boom(self, *a, **k):
-        raise RuntimeError("model down")
-    monkeypatch.setattr(extractor.ExtractionOrchestrator, "extract_chapter", boom)
-    (tmp_path / "gold").mkdir()
-    (tmp_path / "gold" / "story_1.json").write_text(json.dumps(gold()), encoding="utf-8")
-    assert main(["predict", "--gold-dir", str(tmp_path / "gold"), "--out-dir", str(tmp_path / "pred")]) == 0
-    pred = json.loads((tmp_path / "pred" / "story_1.json").read_text())
-    assert pred["text"] == TEXT and pred["mentions"] == []
-    assert "extraction failed: RuntimeError: model down" in (tmp_path / "pred" / "story_1.issues.txt").read_text()
-
-
-def test_cli_predict_can_log_every_llm_call(tmp_path, monkeypatch):
-    from app.pipeline.llm_client import llm_client
-    monkeypatch.setattr(llm_client, "generate", lambda **kw: "not json")
-    (tmp_path / "gold").mkdir()
-    (tmp_path / "gold" / "story_1.json").write_text(json.dumps(gold()), encoding="utf-8")
-    calls = tmp_path / "calls.jsonl"
-    assert main(["predict", "--gold-dir", str(tmp_path / "gold"), "--out-dir", str(tmp_path / "pred"),
-                 "--pipeline", "split", "--log-calls", str(calls)]) == 0
-    [rec] = [json.loads(line) for line in calls.read_text().splitlines()]
-    assert (rec["story_id"], rec["stage"], rec["raw"], rec["error"]) == ("story_1", "STAGE 1", "not json", None)
-
-
-def test_demo_prints_every_stage_with_verified_offsets():
-    from app.evaluation.demo import run_demo
-    from app.tests.test_phase7_split import TEXT as DEMO_TEXT, full_llm
-    lines = []
-    assert run_demo(DEMO_TEXT, generate=full_llm(), out=lines.append) is True
-    out = "\n".join(lines)
-    for stage in ("[Stage 1 · entities] 5 mentions", "[Stage 2 · relationships] 1", "[Stage 3 · events] 2 events",
-                  "[Stage 4 · facts] 1"):
-        assert stage in out
-    assert out.count("✓ offsets verified") == 7 and "✗" not in out        # 5 mentions + 2 triggers
-    assert "Alice —KNOWS→ Bob" in out and "Bob (M4) · age = '30'" in out
-
-
-def test_demo_shows_why_a_stage_rejected_its_output():
-    from app.evaluation.demo import run_demo
-    from app.tests.test_phase7_split import TEXT as DEMO_TEXT, full_llm
-    lines = []
-    assert run_demo(DEMO_TEXT, generate=full_llm(entities={"mentions": [{"text": "Zed", "type": "character"}]}),
-                    out=lines.append) is False
-    out = "\n".join(lines)
-    assert "[entities] REJECTED" in out and "'Zed' does not occur in any sentence of this chunk" in out
+@pytest.mark.skipif(not SCHEMA_PATH.exists(), reason="orion_gold_v1.schema.json not present")
+def test_vocabulary_constants_match_the_schema_file():
+    from app.contracts import gold
+    sch = load_schema()
+    d = sch["$defs"]
+    assert gold.MENTION_TYPES == tuple(d["mention"]["properties"]["type"]["enum"])
+    assert gold.MENTION_KINDS == tuple(d["mention"]["properties"]["mention_kind"]["enum"])
+    assert gold.EVENT_TYPES == tuple(d["event"]["properties"]["type"]["enum"])
+    assert gold.PARTICIPANT_ROLES == tuple(d["eventParticipant"]["properties"]["role"]["enum"])
+    assert gold.PREDICATES == tuple(d["relationship"]["properties"]["predicate"]["enum"])
+    assert gold.FACT_PROPERTIES == tuple(d["fact"]["properties"]["property"]["enum"])
+    assert gold.TEMPORAL_EXPRESSION_TYPES == tuple(d["temporalExpression"]["properties"]["type"]["enum"])
+    assert gold.TEMPORAL_RELATIONS == tuple(d["temporalRelation"]["properties"]["relation"]["enum"])
+    assert sch["properties"]["schema_version"]["const"] == gold.GOLD_SCHEMA_VERSION
 
 
 REAL = pathlib.Path(__file__).resolve().parents[3] / "accounts_from_a_lonely_broadcast_station_orion_annotation"

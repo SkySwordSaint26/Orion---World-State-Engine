@@ -1,5 +1,4 @@
 import json
-from dataclasses import replace
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 
@@ -17,11 +16,8 @@ from app.repositories.contradiction_repo import ContradictionRepository
 from app.core.constants import FactStatus, RelationshipStatus
 from app.pipeline.resolution.fact_resolution import compare_fact_values
 from app.services.consistency_service import ConsistencyService
-from app.contracts import ExtractionResult
-from app.coreference import apply_coreference
-from app.resolution import ground_mention_references, is_provisional, name_key, ResolutionType
-from app.services.entity_resolution_service import EntityResolutionService
-from app.contracts.normalization import normalize_entity_name, normalize_predicate, normalize_property
+from app.contracts.normalization import (
+    is_proper_name, name_words, normalize_entity_name, normalize_predicate, normalize_property)
 from app.config.logging import get_logger
 
 logger = get_logger(__name__)
@@ -36,8 +32,6 @@ class WorldStateService:
         self.event_repo = EventRepository(db)
         self.contradiction_repo = ContradictionRepository(db)
         self.consistency_service = ConsistencyService(db)
-        self.last_resolution = None  # Phase 5: ResolvedExtraction of the latest integration (inspection only)
-        self.last_coreference = None  # Phase 6: CoreferenceResult of the latest integration (inspection only)
 
     def create_world(self, name: str, description: str = "", user_id: Optional[str] = None) -> World:
         return self.world_repo.create({
@@ -57,6 +51,24 @@ class WorldStateService:
 
     def delete_world(self, world_id: str) -> Optional[World]:
         return self.world_repo.delete(world_id)
+
+    def find_entity(self, world_id: str, names: List[str], entity_type: Optional[str] = None) -> Optional[Entity]:
+        """The stored entity one of `names` refers to. An exact name or alias wins; otherwise a short or full form
+        ("Mara" / "Mara Quinn") of exactly one stored entity of the same type. Role phrases ("mother") never match:
+        "her mother" in two chapters is rarely the same person."""
+        names = [n for n in names if is_proper_name(n)]
+        lookup = lambda n: self.entity_repo.get_by_canonical(world_id, n) or self.entity_repo.get_by_alias(world_id, n)
+        exact = next((e for n in names if (e := lookup(n))), None)
+        if exact or not names:
+            return exact
+        wanted = [name_words(n) for n in names]
+        # ponytail: scans every entity of the world per unmatched name; index the name words if worlds grow to thousands
+        stored = lambda e: [name_words(n) for n in [e.canonical_name, *(a.alias for a in e.aliases)]
+                            if is_proper_name(n)]
+        candidates = [e for e in self.entity_repo.list_with_aliases(world_id)
+                      if (entity_type is None or e.entity_type == entity_type)
+                      and any(w <= s or s <= w for s in stored(e) for w in wanted)]
+        return candidates[0] if len(candidates) == 1 else None   # "Quinn" with three Quinns stored: ambiguous, no match
 
     def integrate_extraction_result(
         self,
@@ -88,58 +100,32 @@ class WorldStateService:
             "contradictions_found": 0
         }
 
-        # Phase 5: deterministic mention -> entity resolution against the World State. Only runs when the
-        # extractor supplied observations (hand-built dicts keep the legacy name-based path unchanged).
-        # Anything the resolver leaves unresolved falls through to the legacy lookup below.
-        observations = extraction_data.get("observations")
-        resolved = (
-            EntityResolutionService(self.db).resolve(world_id, observations, extraction_data.get("document"))
-            if isinstance(observations, ExtractionResult) else None
-        )
-        self.last_resolution = None
-        self.last_coreference = None
-
-        def entity_from_resolution(*names: Optional[str]) -> Optional[Entity]:
-            if resolved is None:
-                return None
-            for n in names:
-                eid = resolved.entity_for_name(n or "")
-                if eid and not is_provisional(eid):
-                    ent = self.db.get(Entity, eid)
-                    if ent is not None and ent.world_id == world_id:
-                        return ent
-            return None
-
         # Map canonical/mention names to DB Entity objects
         entity_cache: Dict[str, Entity] = {}
 
         # 1. Process Entities
         for ent_data in extraction_data.get("entities", []):
-            canonical = normalize_entity_name(ent_data.get("canonical_name", "").strip())  # pass-through hook (Phase 4)
+            canonical = normalize_entity_name(ent_data.get("canonical_name", "").strip())
             if not canonical:
                 continue
+            entity_type = ent_data.get("type", "unknown").lower()
 
-            # Look up by canonical or alias in world
-            existing_ent = self.entity_repo.get_by_canonical(world_id, canonical)
-            if not existing_ent:
-                for alias in ent_data.get("aliases", []):
-                    existing_ent = self.entity_repo.get_by_alias(world_id, alias)
-                    if existing_ent:
-                        break
-
-            if not existing_ent:
-                existing_ent = entity_from_resolution(canonical, ent_data.get("mention"))
+            # Look up every name (canonical and aliases) against every stored name (canonical and aliases): a
+            # chapter may call "Daniel" (alias "Dan") the entity stored as "Dan" (alias "Daniel").
+            names = [canonical, *ent_data.get("aliases", [])]
+            existing_ent = self.find_entity(world_id, names, entity_type)
 
             if existing_ent:
                 entity = existing_ent
                 counts["entities_updated"] += 1
-                # Add any new aliases
-                for alias in ent_data.get("aliases", []):
-                    self.entity_repo.add_alias(entity.id, alias, commit=False)
+                # Add any new aliases, this chapter's canonical name included
+                for alias in names:
+                    if alias.strip().lower() != entity.canonical_name.strip().lower():
+                        self.entity_repo.add_alias(entity.id, alias, commit=False)
             else:
                 entity = self.entity_repo.create({
                     "world_id": world_id,
-                    "entity_type": ent_data.get("type", "unknown").lower(),
+                    "entity_type": entity_type,
                     "canonical_name": canonical,
                     "provenance": json.dumps(ent_data.get("source_chunk", ""))
                 }, commit=False)
@@ -149,7 +135,7 @@ class WorldStateService:
 
             entity_cache[canonical.lower()] = entity
             for alias in ent_data.get("aliases", []):
-                entity_cache[alias.lower()] = entity
+                entity_cache[normalize_entity_name(alias.strip()).lower()] = entity
 
             # Record mention
             mention_text = ent_data.get("mention") or canonical
@@ -202,64 +188,19 @@ class WorldStateService:
                         active_ver.status = FactStatus.SUPERSEDED.value
                     self.db.flush()
 
-        if resolved is not None:
-            # Bind provisional ids (entities the resolver planned to create) to the rows step 1 created, attach
-            # ids to the observations, and persist resolved pronoun mentions (with exact offsets).
-            binding = {}
-            for planned in resolved.resolution.new_entities:
-                row = entity_cache.get(planned.canonical_name.lower()) or self.entity_repo.get_by_canonical(
-                    world_id, planned.canonical_name)
-                if row is not None:
-                    binding[planned.entity_id] = row.id
-            resolved = resolved.rebind(binding)
-            # Phase 7: explicit mention references (split pipeline) ground directly through the mentions' entities.
-            resolved = replace(resolved, result=ground_mention_references(resolved.result))
-            # Phase 6: cluster mentions of this chapter and let relationships/events/facts resolve through the
-            # clusters where the name lookup could not (e.g. a raw pronoun subject).
-            resolved, coref = apply_coreference(resolved, extraction_data.get("document"))
-            self.last_resolution = resolved
-            self.last_coreference = coref
-            for pm in resolved.result.entity_mentions:
-                if pm.mention_kind == "pronominal" and pm.entity_id and not is_provisional(pm.entity_id):
-                    res = resolved.resolution.get(pm.id)
-                    self.entity_repo.add_mention(
-                        entity_id=pm.entity_id, surface_text=pm.text, extraction_run_id=extraction_run_id,
-                        start_position=pm.start, end_position=pm.end,
-                        confidence=res.confidence if res else 0.5, commit=False)
-
-        def entity_by_id(entity_id: Optional[str]) -> Optional[Entity]:
-            if not entity_id or is_provisional(entity_id):
-                return None
-            ent = self.db.get(Entity, entity_id)
-            return ent if ent is not None and ent.world_id == world_id else None
-
-        # The extractor's legacy lists are derived 1:1 from the observations; only trust the positional pairing
-        # when the list still lines up (same length and same names), otherwise ignore cluster ids.
-        def paired(observed, legacy_items, same):
-            if resolved is None or len(observed) != len(legacy_items):
-                return [None] * len(legacy_items)
-            return [o if same(o, d) else None for o, d in zip(observed, legacy_items)]
-
         # Helper for entity resolution from cache or DB
         def resolve_cached_entity(name_str: str) -> Optional[Entity]:
-            name_str = normalize_entity_name(name_str)  # pass-through hook (Phase 4)
-            norm = name_str.strip().lower()
-            if norm in entity_cache:
+            name_str = normalize_entity_name(name_str.strip())
+            norm = name_str.lower()
+            if norm in entity_cache:   # this chapter's entities, role phrases ("mother") included
                 return entity_cache[norm]
-            ent = self.entity_repo.get_by_canonical(world_id, name_str)
-            if not ent:
-                ent = self.entity_repo.get_by_alias(world_id, name_str)
-            if not ent:
-                ent = entity_from_resolution(name_str)
+            ent = self.find_entity(world_id, [name_str])
             if ent:
                 entity_cache[norm] = ent
             return ent
 
         # 2. Process Relationships
-        rel_items = extraction_data.get("relationships", [])
-        rel_obs = paired(resolved.result.relationships if resolved else (), rel_items,
-                         lambda o, d: (o.subject, o.object) == (d.get("subject", ""), d.get("object", "")))
-        for rel_idx, rel_data in enumerate(rel_items):
+        for rel_data in extraction_data.get("relationships", []):
             subj_name = rel_data.get("subject", "")
             obj_name = rel_data.get("object", "")
             # TODO(relationship-normalization): NOT IMPLEMENTED. `rel_type` is the raw LLM predicate and is
@@ -271,14 +212,6 @@ class WorldStateService:
 
             subj_ent = resolve_cached_entity(subj_name)
             obj_ent = resolve_cached_entity(obj_name)
-            if rel_obs[rel_idx] is not None:  # Phase 6: cluster-grounded ids fill what the name lookup missed
-                subj_ent = subj_ent or entity_by_id(rel_obs[rel_idx].subject_entity_id)
-                obj_ent = obj_ent or entity_by_id(rel_obs[rel_idx].object_entity_id)
-                # Phase 7: an EXPLICIT mention reference (split pipeline) wins over a name lookup
-                if rel_obs[rel_idx].subject_mention_id:
-                    subj_ent = entity_by_id(rel_obs[rel_idx].subject_entity_id) or subj_ent
-                if rel_obs[rel_idx].object_mention_id:
-                    obj_ent = entity_by_id(rel_obs[rel_idx].object_entity_id) or obj_ent
 
             if subj_ent and obj_ent and subj_ent.id != obj_ent.id:
                 rel = self.relationship_repo.get_or_create_relationship(
@@ -319,10 +252,7 @@ class WorldStateService:
         # Once ids are made globally unique per chapter (and temporal relations are persisted), the
         # temporal rule can be applied across chapters instead of one chapter's relations only.
         local_event_ids: Dict[str, str] = {}  # extractor-local event id -> persisted Event.id
-        ev_items = extraction_data.get("events", [])
-        ev_obs = paired(resolved.result.events if resolved else (), ev_items,
-                        lambda o, d: list(o.participants) == list(d.get("participants", [])))
-        for ev_idx, ev_data in enumerate(ev_items):
+        for ev_data in extraction_data.get("events", []):
             desc = ev_data.get("evidence") or ev_data.get("description") or f"Event ({ev_data.get('type')})"
             ev = self.event_repo.create_event(
                 world_id=world_id,
@@ -338,14 +268,11 @@ class WorldStateService:
             if ev_data.get("id"):
                 local_event_ids[ev_data["id"]] = ev.id
 
-            for p_idx, p_name in enumerate(ev_data.get("participants", [])):
+            for p in ev_data.get("participants", []):   # a name, or {"name", "role"} (AGENT, PATIENT, LOCATION, ...)
+                p_name, role = (p, "PARTICIPANT") if isinstance(p, str) else (p["name"], p.get("role") or "PARTICIPANT")
                 p_ent = resolve_cached_entity(p_name)
-                if p_ent is None and ev_obs[ev_idx] is not None and ev_obs[ev_idx].participant_entity_ids:
-                    p_ent = entity_by_id(ev_obs[ev_idx].participant_entity_ids[p_idx])  # Phase 6
-                if ev_obs[ev_idx] is not None and ev_obs[ev_idx].participant_refs and ev_obs[ev_idx].participant_entity_ids:
-                    p_ent = entity_by_id(ev_obs[ev_idx].participant_entity_ids[p_idx]) or p_ent  # Phase 7: explicit ref
                 if p_ent:
-                    self.event_repo.add_participant(ev.id, p_ent.id, role="PARTICIPANT", commit=False)
+                    self.event_repo.add_participant(ev.id, p_ent.id, role=role, commit=False)
 
         # 4. Consistency Checks (Temporal & Cycles)
         detected_cons = self.consistency_service.run_checks(

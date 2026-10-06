@@ -1,0 +1,7 @@
+# Kept out of the image: secrets are read at container start (env_file in docker-compose.yml), the host venv is
+# replaced by the image's own packages, uploads live in the backend_storage volume.
+.env
+.venv
+storage
+**/__pycache__
+.pytest_cache

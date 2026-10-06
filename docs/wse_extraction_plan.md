@@ -3,6 +3,10 @@
 Date: 2026-09-26 · Research basis: [`nlp_tools_research.md`](nlp_tools_research.md) · Baseline:
 [`llm_pipeline_status.md`](llm_pipeline_status.md)
 
+> **Renamed 2026-09-30:** the `WSE/` folder is now `extractor/` and its package `wse` is `extractor`
+> (`python -m extractor ...`); the backend adapter `app/pipeline/wse_adapter.py` is `app/pipeline/extractor.py`.
+> The in-process LLM pipelines were removed. Older paths below are kept as written.
+
 **Goal:** complete extraction only. From a story's text, produce a full `orion_gold_v1` document: typed mentions
 (with `mention_kind`), coreference clusters, events (trigger, type, participants), relationships, facts, temporal
 expressions and temporal relations, all with exact offsets. World-state integration, contradictions and the API are
@@ -561,3 +565,85 @@ it into the backend's world state needs:
    - A larger GPU removes the swapping.
 6. **Commit the work.** Backend Phases 3–7 and all of `WSE/` are still uncommitted.
 7. **A larger fact / relationship gold set** before tuning those stages further.
+
+### Phase 9 — in progress (2026-09-30): more facts and relationships
+
+The backend integration branch was dropped (2026-09-30); the work is back on extraction quality.
+
+**Gold corrections** (`WSE/data/gold_corrections.json`, applied by `evaluate.corrected` whenever gold is loaded). They
+replace each story's facts and relationships and merge gold clusters. Every item names its entity by a gold mention's
+text and carries an evidence quote from the story, checked on load. Drafted from the texts, **needs human review**.
+- 11 facts / 4 relationships → 14 / 7. The stories state few facts; this is close to all of them.
+- Removed: `Evelyn occupation radio DJ` in parts 2 and 3 ("DJ" isn't in those chapters); `Evelyn WORKS_FOR Dan`
+  in part 3 (backwards: Dan is her part-timer).
+- Merged part 3's `Dan` and `Daniel` gold clusters (one person).
+
+**Where facts were lost** (raw NuExtract replies logged per chunk): the model returns few facts at all; grounding
+dropped only one over-long value. Relationships: most replies are unsupported (`Daniel married_to I` from "...pester
+me"), and 5 of the 7 gold relationships were never proposed.
+
+Changes, measured on the saved Phase 8 mentions (relations stage only), then in a full run:
+
+| Change | Facts found / wrong (of 14) | Relationships found / wrong (of 7) |
+|---|---|---|
+| Phase 8 prompt | 4 / 2 | 1 / 7 (entity level) |
+| Chunks of 1,000 or 500 chars instead of 2,000 | 3–4 / 1 | 0 / 7–8 |
+| `# Context:` header (NuExtract's shipped chat template has it; our prompt didn't) | 4 / 4 | 0 / 4 |
+| + one made-up worked example per template (`# Examples:`) | **6 / 8** | 0 / 11 |
+| + relationships need an evidence quote naming both ends and a cue word (`CUES`) | 6 / 8 | 0 / 2 |
+| + possessive role nouns from spaCy's parse (`role_pairs`: "my boss", "Dan’s mother") | 6 / 8 | 2 / 7 |
+| + "This is X" / "I'm X" links X to the narrator (`coref.naming_links`), full run | 6 / 8 | **4 / 4** |
+| + fact value checks per property (`fact_value`), full run | **7 / 2** | 4 / 4 |
+
+Full run, 4/4 stories, 2 min 47 s (was 2 min 28 s: the examples lengthen prompts). Micro: **facts P 0.78 / R 0.50 /
+F1 0.61** (was 0.47), **relationships P 0.50 / R 0.57 / F1 0.53** (was 0). Side effect of the narrator link: event participants
+(entity) 0.083 → 0.142. Other metrics unchanged. 22 tests pass.
+
+Fact value checks (`fact_value`, on the value's occurrence in spaCy's parse):
+- colors are trimmed to color words (`moppy dark` → `dark`); a color value without one is dropped (`human` eyes);
+- other properties (not age, date of birth, status): no digits (`104.6 F.M.`), and the last word must not merely modify
+  a noun outside the value (`weather` of "weather forecast", `broadcasting` of "broadcasting room"), unless that noun
+  is a job noun ("a radio DJ position");
+- an occupation is not a relationship word (`coworker`) or a verb (`announcing`).
+
+By hand:
+- Relationship extras are mostly true but unannotated: `Evelyn WORKS_FOR employer` (her boss, which coreference
+  didn't link), `her RELATED_TO niece`, `Evelyn ENEMY_OF nemesis` (the bird), and `our WORKS_FOR boss` (the "we"
+  cluster has no name).
+- Every kept relationship came from `role_pairs`. The gated NuExtract relationship call kept nothing on these stories.
+- Fact extras after the checks: 2, both true but unannotated (Dan `unconscious`, Jennifer in the `woods`). Before the
+  checks: those 2, plus `moppy dark` for `dark` and 5 wrong (`weather`, `broadcasting`, `coworker` twice as an
+  occupation, `104.6 F.M.` as a location).
+- Missed facts (7), none ever proposed by NuExtract: Evelyn / Daniel `location`, Daniel `part-timer` (part 2, only in
+  the boss's quote), Rose `seventy`, Jennifer `missing`, Daniel `recovering` (part 4).
+
+Still open:
+- Fact recall: the 7 missed facts above.
+- "We were friends in college" (`Evelyn FRIEND_OF Jennifer Cook`) names neither person, so it fails the evidence check.
+- `Daniel WORKS_FOR boss` in parts 2 and 4 comes only from "our boss" and "Dan will be your part-timer".
+- The gold is still small: 14 facts and 7 relationships in 4 stories.
+
+### Backend integration (2026-09-30): `EXTRACTION_PIPELINE=wse`
+
+A lean replacement for the deleted `feature/wse-end-to-end` branch:
+- `python -m wse run IN.txt OUT.json`: one chapter's text → its gold document.
+- `backend/app/pipeline/wse_adapter.py`: runs that in the WSE venv (subprocess) and maps the gold document to the
+  plain dict `integrate_extraction_result` already accepts. One entity per named cluster, or per nameless cluster a
+  fact or relationship is about; its name is the most frequent proper name, other names become aliases. Facts
+  become attributes. OTHER events are left out, with their temporal relations.
+- `parse_age` reads ages in words ("twenty four"); WSE keeps values verbatim, so REQ-23 never fired on them.
+- Entity lookup across chapters matches every name against every stored name and alias. Before, a chapter calling
+  Dan "Daniel" (alias "Dan") created a second Dan.
+- WSE unloads every Ollama model before loading its encoders. A loaded chat model (qwen2.5:7b, 4.6 GB) made
+  chapter 1 fail with CUDA out of memory; this is the likely cause of the earlier end-to-end failure.
+
+Real run through the actual extraction job (SQLite test database, qwen2.5:7b loaded beforehand): the 4 story parts
+plus a short chapter 5 where Evelyn says she is nineteen. 5/5 chapters done in 3 min 47 s. 22 entities, 4
+relationships, 79 events. One contradiction: "Age of 'Evelyn' decreased: 24 in chapter 1, but 19 in chapter 5."
+
+Still visible in that run:
+- `Jennifer Cook` and `Jennifer` are two entities (WSE clusters only identical names).
+- Evelyn's occupation `radio DJ` is superseded by a wrong `station`.
+- Singers and bands (`Fleetwood Mac`, `Stevie Nicks`, `Eagles`) are typed as characters.
+- A restated relationship adds another ACTIVE version each chapter (existing backend behavior).
+- About 45 s per chapter, against the SRS budget of 10 s.

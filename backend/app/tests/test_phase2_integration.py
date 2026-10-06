@@ -1,8 +1,6 @@
 """Phase 2: the rule engine wired into world-state integration, persistence, dedupe and the Phase 1 transaction."""
 import ast
-import json
 import pathlib
-import re
 
 import pytest
 
@@ -10,6 +8,7 @@ from app.consistency import ConsistencyEngine
 from app.models.contradiction import Contradiction
 from app.models.entity import Entity
 from app.models.fact import Fact, FactVersion
+from app.pipeline import extractor
 from app.pipeline.llm_client import llm_client
 from app.services.consistency_service import ConsistencyService
 from app.services.world_state_service import WorldStateService
@@ -293,26 +292,18 @@ def test_contradiction_detection_does_not_commit_on_its_own(world):
     assert env.fact_statuses(w["world_id"], "Alice", "eye_color") == [("blue", "ACTIVE")]
 
 
-def _eye_color_llm(env, colors, fail_for=None):
-    """LLM stub: Alice's eye colour per chapter, a fresh friend per chapter, and a relationship between them."""
-    def generate(prompt, system_prompt=None, json_mode=True, temperature=0.0, schema=None):
-        chapter = int(re.search(r"Chapter (\d+)", prompt).group(1))
-        friend = f"Friend{chapter}"
-        return json.dumps({
-            "entities": [
-                {"mention": "Alice", "canonical_name": "Alice", "type": "character",
-                 "attributes": {"eye_color": colors[chapter]}, "evidence": "Alice"},
-                {"mention": friend, "canonical_name": friend, "type": "character", "attributes": {}, "evidence": friend},
-            ],
-            "relationships": [{"subject": "Alice", "predicate": "KNOWS", "object": friend, "certainty": "DEFINITE", "evidence": "x"}],
-            "events": [], "state_changes": [], "temporal_relations": [],
-        })
-    return generate
+def _eye_color_extractor(colors):
+    """Extractor stub: Alice's eye colour per chapter, a fresh friend per chapter, and a relationship between them."""
+    def extract_chapter(text, chapter_number):
+        friend = f"Friend{chapter_number}"
+        return chapter_data([person("Alice", eye_color=colors[chapter_number]), person(friend)],
+                            [rel("Alice", "KNOWS", friend)])
+    return extract_chapter
 
 
 def test_contradictions_commit_together_with_the_chapter_and_run_status(world, monkeypatch):
     env, w = world
-    monkeypatch.setattr(llm_client, "generate", _eye_color_llm(env, {1: "blue", 2: "green", 3: "green"}))
+    monkeypatch.setattr(extractor, "extract_chapter", _eye_color_extractor({1: "blue", 2: "green", 3: "green"}))
 
     assert run_extraction_job(w["job_id"])["status"] == "success"
 
@@ -329,7 +320,7 @@ def test_contradictions_commit_together_with_the_chapter_and_run_status(world, m
 
 def test_a_consistency_failure_rolls_back_the_whole_chapter_and_keeps_earlier_state(world, monkeypatch):
     env, w = world
-    monkeypatch.setattr(llm_client, "generate", _eye_color_llm(env, {1: "blue", 2: "green", 3: "green"}))
+    monkeypatch.setattr(extractor, "extract_chapter", _eye_color_extractor({1: "blue", 2: "green", 3: "green"}))
     assert env.execute(w["world_id"], w["job_id"], w["runs"][1])["status"] == "success"
     assert env.execute(w["world_id"], w["job_id"], w["runs"][2])["status"] == "success"
     before_rows = env.world_rows(w["world_id"])
@@ -351,7 +342,7 @@ def test_a_consistency_failure_rolls_back_the_whole_chapter_and_keeps_earlier_st
 
 def test_a_failure_after_a_contradiction_was_written_removes_that_contradiction_too(world, monkeypatch):
     env, w = world
-    monkeypatch.setattr(llm_client, "generate", _eye_color_llm(env, {1: "blue", 2: "green", 3: "green"}))
+    monkeypatch.setattr(extractor, "extract_chapter", _eye_color_extractor({1: "blue", 2: "green", 3: "green"}))
     assert env.execute(w["world_id"], w["job_id"], w["runs"][1])["status"] == "success"
 
     def boom(self, *a, **k):
@@ -396,7 +387,7 @@ def test_full_integration_with_every_rule_firing_never_touches_an_llm(world, mon
     def forbidden(*a, **k):
         raise AssertionError("an LLM was called by the consistency engine")
 
-    for name in ("generate", "chat", "_call_ollama", "_call_openai", "_chat_ollama", "_chat_openai", "_mock_extraction"):
+    for name in ("chat", "_chat_ollama", "_chat_openai"):
         monkeypatch.setattr(llm_client, name, forbidden)
     people = [person("Alice", eye_color="blue", age="40", status="dead"), person("Bob"), person("Carl")]
     integrate(env, w["world_id"], w["runs"][1], chapter_data(people, [rel("Alice", "ENEMY_OF", "Bob"), rel("Alice", "FATHER_OF", "Carl")]))
@@ -406,3 +397,40 @@ def test_full_integration_with_every_rule_firing_never_touches_an_llm(world, mon
     rules = sorted(c["explanation"].split("]")[0][1:] for c in contradictions(env, w["world_id"]))
     assert rules == ["AGE_MONOTONIC", "DEAD_THEN_ALIVE", "IMMUTABLE_FACT",
                      "RELATIONSHIP_INCOMPATIBLE", "RELATIONSHIP_SINGLE_SOURCE"]
+
+
+# ------------------------------------------------------------------- entity resolution
+def entity_names(env, world_id):
+    with env.Session() as s:
+        return sorted(e.canonical_name for e in s.query(Entity).filter_by(world_id=world_id))
+
+
+def test_short_names_and_titles_reach_the_full_name_so_rules_fire_across_chapters(world):
+    """The Gull Point e2e: "Mara" (ch 2) is "Mara Quinn" (ch 1), "Captain Brandt" is "Elias Brandt"."""
+    env, w = world
+    ch1 = [person("Mara Quinn", age="forty-one", eye_color="green"), person("Lily Quinn"),
+           person("Captain Elias Brandt", status="dead")]
+    integrate(env, w["world_id"], w["runs"][1], chapter_data(ch1))
+    ch2 = [person("Mara", age="thirty-eight", eye_color="grey"), person("Captain Brandt", status="alive and well")]
+    integrate(env, w["world_id"], w["runs"][2], chapter_data(ch2, [rel("Captain Brandt", "FRIEND_OF", "Mara")]))
+
+    assert entity_names(env, w["world_id"]) == ["Elias Brandt", "Lily Quinn", "Mara Quinn"]
+    rules = sorted(c["explanation"].split("]")[0][1:] for c in contradictions(env, w["world_id"]))
+    assert rules == ["AGE_MONOTONIC", "DEAD_THEN_ALIVE", "IMMUTABLE_FACT"]
+    assert rel_statuses(env, w["world_id"], "Elias Brandt", "Mara Quinn") == [("FRIEND_OF", "ACTIVE")]
+
+
+def test_ambiguous_short_names_and_role_words_are_never_merged(world):
+    env, w = world
+    ch1 = [person("Mara Quinn"), person("Lily Quinn"), person("mother")]
+    integrate(env, w["world_id"], w["runs"][1], chapter_data(ch1, [rel("mother", "PARENT_OF", "Mara Quinn")]))
+    ch2 = [person("Quinn"), person("mother"), person("Lily"), person("Mara's oldest friend")]
+    integrate(env, w["world_id"], w["runs"][2], chapter_data(ch2, [rel("mother", "PARENT_OF", "Lily")]))
+
+    # "Quinn" fits two people, so it is a new entity; each chapter's "mother" is its own person
+    assert entity_names(env, w["world_id"]) == ["Lily Quinn", "Mara Quinn", "Mara's oldest friend", "Quinn",
+                                                "mother", "mother"]
+    with env.Session() as s:
+        from app.models.relationship import Relationship
+        mothers = {e.id for e in s.query(Entity).filter_by(world_id=w["world_id"], canonical_name="mother")}
+        assert len({r.source_entity_id for r in s.query(Relationship).filter(Relationship.source_entity_id.in_(mothers))}) == 2

@@ -37,6 +37,7 @@ class WorldUpdate(BaseModel):
         return v
 
 class WorldStats(BaseModel):
+    manuscripts_count: int = 0
     entities_count: int = 0
     characters_count: int = 0
     locations_count: int = 0

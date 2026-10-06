@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { useWorldStore } from '../store/useWorldStore';
@@ -14,9 +14,16 @@ interface LogItem {
 export const WorldHome: React.FC = () => {
   const navigate = useNavigate();
   const { worldId } = useParams<{ worldId: string }>();
-  const { worlds, addEntity, entities, contradictions } = useWorldStore();
-  
-  const world = worlds.find((w) => w.id === worldId) || worlds[0];
+  const { worlds, addEntity, entities, contradictions, fetchEntitiesForWorld, fetchContradictionsForWorld } = useWorldStore();
+
+  const world = worlds.find((w) => w.id === worldId);
+
+  useEffect(() => {                   // the counts below come from this world's API data, not the store's leftovers
+    if (worldId) {
+      fetchEntitiesForWorld(worldId);
+      fetchContradictionsForWorld(worldId);
+    }
+  }, [worldId, fetchEntitiesForWorld, fetchContradictionsForWorld]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'character' | 'location' | 'object' | 'event'>('character');
@@ -24,13 +31,8 @@ export const WorldHome: React.FC = () => {
   const [entitySubtype, setEntitySubtype] = useState('');
   const [entityDesc, setEntityDesc] = useState('');
 
-  // Activity logs - we initialize with some mock entries, and add new ones when the user creates entities
-  const [activityLogs, setActivityLogs] = useState<LogItem[]>([
-    { id: 'act-1', type: 'edit', title: 'Fact Edited', detail: 'in The Ashen Wastes', time: '2 hours ago' },
-    { id: 'act-2', type: 'create', title: 'Character Created', detail: 'Valerius Thorne', time: '5 hours ago' },
-    { id: 'act-3', type: 'link', title: 'Connection forged', detail: 'Valerius to The Obsidian Syndicate', time: '1 day ago' },
-    { id: 'act-4', type: 'edit', title: 'Biography Updated', detail: 'Elara Vance', time: '2 days ago' }
-  ]);
+  // Activity logs: this session's actions only (the backend keeps no activity log)
+  const [activityLogs, setActivityLogs] = useState<LogItem[]>([]);
 
   const handleOpenModal = (type: typeof modalType) => {
     setModalType(type);

@@ -101,7 +101,7 @@ export const WorldTimeline: React.FC = () => {
                       )}
                       
                       <span className={`font-label-sm text-[10px] uppercase tracking-widest block mb-1.5 ${isActive ? 'text-primary' : 'text-primary/60'}`}>
-                        {event.period} • Year {event.year}
+                        Chapter {event.year} • {event.period}
                       </span>
                       
                       <h3 className={`font-headline-md text-headline-md group-hover:text-primary transition-colors text-base font-bold ${
@@ -140,7 +140,7 @@ export const WorldTimeline: React.FC = () => {
               {selectedEvent?.title}
             </h2>
             <p className="font-label-sm text-[10px] text-on-surface-variant/50 uppercase tracking-widest mt-1">
-              Year {selectedEvent?.year} • {selectedEvent?.period}
+              Chapter {selectedEvent?.year} • {selectedEvent?.period}
             </p>
           </div>
 

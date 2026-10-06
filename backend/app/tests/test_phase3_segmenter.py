@@ -7,7 +7,7 @@ import pytest
 
 from app.preprocessing import ChapterDocument, preprocess_chapter
 
-SAMPLE = pathlib.Path(__file__).resolve().parents[3] / "WSE" / "data" / "Left Right Game 1.txt"
+SAMPLE = pathlib.Path(__file__).resolve().parents[3] / "extractor" / "data" / "Left Right Game 1.txt"
 
 
 def sentences(text):

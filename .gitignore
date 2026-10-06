@@ -50,3 +50,6 @@ storage/
 postgres-data/
 tmp/
 temp/
+
+# graphify knowledge graph (generated: graphify update .)
+graphify-out/

@@ -36,7 +36,11 @@ def test_property_kinds_come_from_the_controlled_vocabulary():
 
 def test_age_parsing_is_strict():
     assert vocab.parse_age("30") == 30 and vocab.parse_age(30) == 30 and vocab.parse_age(" 45 years old ") == 45
-    for junk in ("thirty", "about 40", "1985", "-3", None, True, 3.5, "", "151"):
+    # words, as fiction writes them and the extractor keeps them verbatim
+    assert vocab.parse_age("thirty") == 30 and vocab.parse_age("twenty four") == 24
+    assert vocab.parse_age("Twenty-four years old") == 24 and vocab.parse_age("seven") == 7
+    for junk in ("about 40", "thirty old men", "twenty twenty", "four twenty", "a hundred", "1985", "-3", None,
+                 True, 3.5, "", "151"):
         assert vocab.parse_age(junk) is None
 
 
@@ -118,7 +122,7 @@ def test_age_older_than_a_later_chapter_is_a_contradiction_when_an_earlier_chapt
 
 def test_age_rule_ignores_unparseable_unchaptered_and_rejected_versions():
     rule = AgeMonotonicRule()
-    assert rule.evaluate(fact_check("age", fv("thirty", 5), fv("40", 3))) == []
+    assert rule.evaluate(fact_check("age", fv("about thirty", 5), fv("40", 3))) == []
     assert rule.evaluate(fact_check("age", fv("30", None), fv("40", 3))) == []
     assert rule.evaluate(fact_check("age", fv("30", 5), fv("40", None))) == []
     assert rule.evaluate(fact_check("age", fv("30", 5), fv("40", 3, status=CONTRADICTED))) == []

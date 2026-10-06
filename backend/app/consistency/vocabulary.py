@@ -28,8 +28,8 @@ AGE_PROPERTY = "age"
 STATUS_PROPERTY = "status"
 
 # Status values that have a defined meaning for REQ-26. Any other status value is ignored.
-DEAD_STATUS_VALUES = frozenset({"dead", "deceased"})
-ALIVE_STATUS_VALUES = frozenset({"alive", "living"})
+DEAD_STATUS_VALUES = frozenset({"dead", "deceased", "died", "drowned", "killed", "murdered", "slain"})
+ALIVE_STATUS_VALUES = frozenset({"alive", "living", "alive and well", "still alive", "survived"})
 
 # Explicitly incompatible predicate pairs (order of the two predicates does not matter).
 # Carried over unchanged from the original implementation; "A KNOWS B" etc. are NOT in this set.
@@ -79,6 +79,21 @@ def is_blank(value: Any) -> bool:
 
 
 _AGE_RE = re.compile(r"^\s*(\d{1,3})\s*(?:years?(?:\s*old)?)?\s*$", re.IGNORECASE)
+_AGE_WORDS_RE = re.compile(r"^\s*([a-z]+)(?:[\s-]+([a-z]+))?\s*(?:years?(?:\s*old)?)?\s*$", re.IGNORECASE)
+_UNITS = {w: n for n, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve thirteen "
+                                     "fourteen fifteen sixteen seventeen eighteen nineteen".split())}
+_TENS = {w: 10 * n for n, w in enumerate("twenty thirty forty fifty sixty seventy eighty ninety".split(), 2)}
+
+
+def _age_in_words(text: str) -> Optional[int]:
+    """"twenty four", "twenty-four years old", "seven" -> 24, 24, 7; anything else (incl. over 99) -> None."""
+    match = _AGE_WORDS_RE.match(text)
+    if not match:
+        return None
+    first, second = match.group(1).lower(), (match.group(2) or "").lower()
+    if not second:
+        return _UNITS.get(first, _TENS.get(first))
+    return _TENS[first] + _UNITS[second] if first in _TENS and 0 < _UNITS.get(second, 0) < 10 else None
 
 
 def parse_age(value: Any) -> Optional[int]:
@@ -92,8 +107,7 @@ def parse_age(value: Any) -> Optional[int]:
         number = int(value)
     elif isinstance(value, str):
         match = _AGE_RE.match(value)
-        if match:
-            number = int(match.group(1))
+        number = int(match.group(1)) if match else _age_in_words(value)
     if number is None or not 0 <= number <= 150:
         return None
     return number

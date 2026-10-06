@@ -94,16 +94,12 @@ backend/
 │   │   │   └── job_update_task.py
 │   │   └── __init__.py
 │   │
-│   ├── pipeline/             # LLM Extraction & Entity Resolution Pipeline
-│   │   ├── extractor.py      # Pipeline orchestrator
-│   │   ├── llm_client.py     # Local Ollama / OpenAI / Mock multi-provider
+│   ├── pipeline/             # Extraction (runs ../extractor) and chat
+│   │   ├── extractor.py      # ../extractor subprocess -> integration dict
+│   │   ├── llm_client.py     # Chat: Ollama / OpenAI / Mock
 │   │   ├── prompts/
-│   │   │   ├── extraction_prompt.txt
 │   │   │   └── chat_prompt.txt
-│   │   ├── parsers/
-│   │   │   └── extraction_parser.py
 │   │   └── resolution/
-│   │       ├── entity_resolution.py
 │   │       ├── fact_resolution.py
 │   │       └── relationship_resolution.py
 │   │
@@ -155,8 +151,7 @@ Copy or edit `.env`:
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/orion"
 REDIS_URL="redis://localhost:6379/0"
-LLM_PROVIDER="ollama" # or "openai"; "mock" is an explicit offline/test mode only (no automatic fallback if the LLM fails)
-EXTRACTION_PIPELINE="monolithic" # or "split" (4 focused, validated LLM stages per chunk)
+LLM_PROVIDER="ollama" # chat only, or "openai"/"mock"; extraction always runs ../extractor (its venv + GPU)
 EXTRACTION_EXECUTOR="background" # or "celery" (one ordered task per job; requires Redis + a worker)
 OLLAMA_URL="http://localhost:11434/api/chat"
 OLLAMA_MODEL="llama3.1:8b-instruct-q4_K_M"
