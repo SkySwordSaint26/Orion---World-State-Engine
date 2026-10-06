@@ -7,6 +7,8 @@ stories (docs/wse_extraction_plan.md, Phase 3). `link` maps them onto the docume
     - an unmatched span whose head word is a pronoun becomes a new `pronominal` mention, typed from its cluster;
       a cluster of pronouns only is a character when personal ("I ... me ... my": the narrator), skipped when it has
       only "it"-like pronouns (nothing to type it by)
+    - an unmatched proper name in a cluster with a matched mention becomes a new `proper` mention ("Mara" after
+      "Mara Quinn": mention detection often finds only the full name, and "Mara's brother" needs "Mara")
     - other unmatched spans are ignored: mention detection is Phase 2's job (adding them lowered its scores)
 Then `merge` joins repeats of the same name that the model split or left unclustered, and names introduced as
 "my / his / her ... name is X" (the model misses these: the narrator's "I" was never linked to "Evelyn").
@@ -85,21 +87,25 @@ def link(doc: Dict[str, Any], clusters: Sequence[Sequence[Span]]) -> None:
     keyed = {(i, j): sp for i, c in enumerate(clusters) for j, sp in enumerate(c)}
     to_mention = align(keyed, {m["mention_id"]: (m["start"], m["end"]) for m in mentions})
     by_id = {m["mention_id"]: m for m in mentions}
-    used, pronoun_spans = set(), set()
+    used, added_spans = set(), set()
     for i, cluster in enumerate(clusters):
         members = list(dict.fromkeys(to_mention[(i, j)] for j in range(len(cluster))
                                      if (i, j) in to_mention and to_mention[(i, j)] not in used))
-        pronouns = list(dict.fromkeys(sp for j, sp in enumerate(cluster) if (i, j) not in to_mention
-                                      and sp not in pronoun_spans and kind(parsed, *sp) == "pronominal"))
+        unmatched = [sp for j, sp in enumerate(cluster) if (i, j) not in to_mention and sp not in added_spans]
         types = Counter(by_id[m]["type"] for m in members)
+        # pronouns, and a short name in a cluster with a detected mention ("Mara Quinn ... Mara's brother"): mention
+        # detection often finds only the full name, and a role ("Mara's brother") needs its owner as a mention
+        new = list(dict.fromkeys((sp, k) for sp in unmatched if (k := kind(parsed, *sp)) == "pronominal"
+                                 or (k == "proper" and types
+                                     and not any(m["start"] < sp[1] and sp[0] < m["end"] for m in mentions))))
         ctype = (types.most_common(1)[0][0] if types
-                 else "character" if any(text[s:e].lower() in PERSONAL for s, e in pronouns) else None)
-        if ctype is None or len(members) + len(pronouns) < 2:
+                 else "character" if any(text[s:e].lower() in PERSONAL for (s, e), _ in new) else None)
+        if ctype is None or len(members) + len(new) < 2:
             continue
-        pronoun_spans.update(pronouns)
-        for s, e in pronouns:
+        added_spans.update(sp for sp, _ in new)
+        for (s, e), k in new:
             m = {"mention_id": f"M{len(mentions) + 1}", "text": text[s:e], "type": ctype,
-                 "mention_kind": "pronominal", "start": s, "end": e}
+                 "mention_kind": k, "start": s, "end": e}
             mentions.append(m)
             members.append(m["mention_id"])
         if len(members) >= 2:

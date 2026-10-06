@@ -10,7 +10,7 @@ one combined template made it return nothing:
     relationships  subject and object verbatim, relation from the gold predicates, and an evidence quote
 Code grounds every answer and drops what fails:
     - a relationship's evidence must be in the chunk, name both ends and contain a cue word for the relation (`CUES`)
-    - a name must be the text of a character or organization mention in the chunk
+    - a name must be the text of a character or organization mention in the chunk (any case, without "the" or a title)
     - a value must occur in the chunk (the source's exact characters are kept) and be at most MAX_VALUE_CHARS long
     - no self-relationships; duplicates (same entities, predicate / property, value) are kept once, a relationship in
       its canonical form (`canonical`: "B FRIEND_OF A" repeats "A FRIEND_OF B")
@@ -23,6 +23,7 @@ from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.contracts.gold import FACT_PROPERTIES, PREDICATES
+from app.contracts.normalization import normalize_entity_name
 from app.preprocessing import chunk_document, preprocess_chapter
 from extractor.llm import generate
 from extractor.mentions import spacy_nlp
@@ -109,6 +110,12 @@ def entities(doc: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
     return groups
 
 
+def name_key(name: str) -> str:
+    """How an answer's name is matched to a mention's text: any case, without a leading article or title (NuExtract
+    answers "the Harbor Council" and "Doctor Hanna Weiss" where the mentions are "Harbor Council", "Hanna Weiss")."""
+    return normalize_entity_name(re.sub(r"^(?:the|a|an)\s+", "", name.strip(), flags=re.IGNORECASE)).casefold()
+
+
 def _first(ms: List[Dict[str, Any]], kind: str) -> Optional[Dict[str, Any]]:
     return next((m for m in ms if m["mention_kind"] == kind), None)
 
@@ -163,9 +170,9 @@ def fact_value(prop: str, span: Any) -> Optional[str]:
 
 def role_pairs(doc: Dict[str, Any], parsed: Any) -> List[Tuple[str, str, str]]:
     """(subject, predicate, object) mention ids from possessive role nouns (ROLES). The role's holder is the subject
-    of "X is my brother", else the smallest mention of the noun without its possessor; with neither, the noun gets a
-    new character mention ("Dan’s mother": mention detection misses these), clustered by (noun, possessor's entity):
-    "Dan’s mother" ... "his mother" is one person."""
+    of "X is my brother", else the name in apposition ("my brother, X"), else the smallest mention of the noun without
+    its possessor; with none, the noun gets a new character mention ("Dan’s mother": mention detection misses these),
+    clustered by (noun, possessor's entity): "Dan’s mother" ... "his mother" is one person."""
     ms = doc["mentions"]
     cluster_of = {m: c["cluster_id"] for c in doc["coreference_clusters"] for m in c["mentions"]}
     next_id = lambda items, key: max((int(i[key][1:]) for i in items), default=0) + 1
@@ -186,7 +193,9 @@ def role_pairs(doc: Dict[str, Any], parsed: Any) -> List[Tuple[str, str, str]]:
             continue
         subject = next((c for c in t.head.children if c.dep_ == "nsubj"), None) if t.dep_ == "attr" else None
         holder = smallest(subject) if subject is not None and subject.lower_ not in IMPERSONAL else None
-        holder = holder or smallest(t, without=poss)
+        # the name in apposition: "Mara's brother, Tobias Quinn" / "Tobias Quinn, Mara's brother"
+        appos = next((c for c in t.children if c.dep_ == "appos"), t.head if t.dep_ == "appos" else None)
+        holder = holder or (smallest(appos) if appos is not None else None) or smallest(t, without=poss)
         if holder is None:
             start = poss.idx if poss.pos_ == "PROPN" else t.idx
             holder = {"mention_id": f"M{next_id(ms, 'mention_id')}", "text": doc["text"][start:t.idx + len(t)],
@@ -232,13 +241,13 @@ def relations(doc: Dict[str, Any]) -> None:
         relate(by_id[a], predicate, by_id[b])
 
     for chunk in chunk_document(document, max_chars=CHUNK_CHARS, overlap_sentences=0):
-        names: Dict[str, Dict[str, Any]] = {}                       # casefolded text -> first matching mention
+        names: Dict[str, Dict[str, Any]] = {}                       # name_key(text) -> first matching mention
         for m in doc["mentions"]:
             if chunk.start <= m["start"] < chunk.end and kind_of[group_of[m["mention_id"]]] in TYPES:
-                names.setdefault(m["text"].casefold(), m)
+                names.setdefault(name_key(m["text"]), m)
         if not names:
             continue
-        find = lambda name: names.get(name.strip().casefold()) if isinstance(name, str) else None
+        find = lambda name: names.get(name_key(name)) if isinstance(name, str) else None
 
         for person in ask(PEOPLE, chunk.text).get("people") or []:
             m = find(person.get("name"))
