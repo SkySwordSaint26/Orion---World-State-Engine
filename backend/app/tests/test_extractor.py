@@ -53,7 +53,8 @@ def test_entities_are_named_clusters_or_what_facts_and_relationships_are_about()
     ]   # fog: not a character / location / organization; woman: no name and nothing is about her
     assert out["relationships"] == [{"subject": "Evelyn", "predicate": "WORKS_FOR", "object": "boss"}]
     assert out["events"] == [{"id": "E1", "type": "CONVERSATION", "evidence": "I told my boss about the fog.",
-                              "participants": ["Evelyn", "boss"]}]    # OTHER events are left out ...
+                              "participants": [{"name": "Evelyn", "role": "AGENT"},
+                                               {"name": "boss", "role": "RECIPIENT"}]}]   # OTHER events: left out ...
     assert out["temporal_relations"] == []                            # ... with their temporal relations
 
 

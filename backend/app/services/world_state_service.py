@@ -268,10 +268,11 @@ class WorldStateService:
             if ev_data.get("id"):
                 local_event_ids[ev_data["id"]] = ev.id
 
-            for p_name in ev_data.get("participants", []):
+            for p in ev_data.get("participants", []):   # a name, or {"name", "role"} (AGENT, PATIENT, LOCATION, ...)
+                p_name, role = (p, "PARTICIPANT") if isinstance(p, str) else (p["name"], p.get("role") or "PARTICIPANT")
                 p_ent = resolve_cached_entity(p_name)
                 if p_ent:
-                    self.event_repo.add_participant(ev.id, p_ent.id, role="PARTICIPANT", commit=False)
+                    self.event_repo.add_participant(ev.id, p_ent.id, role=role, commit=False)
 
         # 4. Consistency Checks (Temporal & Cycles)
         detected_cons = self.consistency_service.run_checks(

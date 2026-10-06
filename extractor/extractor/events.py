@@ -5,8 +5,14 @@ already computed by the coreference stage:
                   are mostly not events)
     type          a general English verb lexicon over the lemma; OTHER otherwise (the gold's most common type)
     participants  from the dependency parse: subject -> agent (passive subject -> patient; a conjoined verb shares
-                  the subject of its head), direct object -> patient, dative -> recipient, object of a place
-                  preposition -> location. Each dependent maps to the smallest mention containing it.
+                  the subject of its head; "Mara, Tobias and Lily" are all subjects), direct object -> patient,
+                  dative -> recipient, object of a place preposition -> location, except a character after
+                  a speech verb ("said to Hanna": recipient) or after another preposition than "to" ("stared at
+                  me": participant). The goal of a movement stays a location, as in the gold ("rushed over to
+                  him"), and so does an organization ("into the radio station"). Each dependent maps to the
+                  smallest mention containing it.
+Also a DEATH event for a stated death, "X was dead" (no verb event: BookNLP marks verbs), with X as patient; and
+"said nothing" is no CONVERSATION.
 """
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -22,7 +28,7 @@ LEXICON = {
     "MEETING": "meet greet visit",
     "DISCOVERY": "find discover notice realize spot",
     "ATTACK": "attack hit strike stab shoot punch slap kick",
-    "DEATH": "die",
+    "DEATH": "die drown perish",
     "CONFLICT": "fight argue struggle",
     "CREATION": "build create",
     "DESTRUCTION": "destroy break smash shatter demolish",
@@ -32,6 +38,7 @@ assert set(LEXICON) <= set(EVENT_TYPES)
 PLACE_PREPOSITIONS = {"in", "into", "on", "onto", "at", "through", "to", "from", "out", "inside", "across", "along",
                       "up", "down", "under", "over", "toward", "towards", "behind", "near"}
 POSSESSIVES = {"my", "your", "his", "her", "its", "our", "their"}   # determiners, never participants
+DEAD = {"dead", "deceased"}
 
 
 def children(tokens: List[Dict[str, str]]) -> Dict[int, List[int]]:
@@ -43,7 +50,7 @@ def children(tokens: List[Dict[str, str]]) -> Dict[int, List[int]]:
 
 
 def participants(i: int, tokens: List[Dict[str, str]], children: Dict[int, List[int]],
-                 mention_at) -> List[Tuple[str, str]]:
+                 mention_at, type_of, speech: bool = False) -> List[Tuple[str, str]]:
     rel = lambda j: tokens[j]["dependency_relation"]
     subjects = [j for j in children.get(i, []) if rel(j) in ("nsubj", "nsubjpass")]
     if not subjects and rel(i) == "conj":                    # "I ran to the desk and picked it up"
@@ -56,7 +63,21 @@ def participants(i: int, tokens: List[Dict[str, str]], children: Dict[int, List[
             found.append(("recipient", j))
         elif rel(j) == "prep" and tokens[j]["lemma"].lower() in PLACE_PREPOSITIONS:
             found += [("location", k) for k in children.get(j, []) if rel(k) == "pobj"]
-    return list(dict.fromkeys((role, m) for role, j in found if (m := mention_at(j))))
+    for role, j in list(found):                             # "Mara, Tobias and Lily": every conjunct, chained
+        stack = [j]
+        while stack:
+            conj = [k for k in children.get(stack.pop(), []) if rel(k) == "conj"]
+            found += [(role, k) for k in conj]
+            stack += conj
+    out = []
+    for role, j in found:
+        m = mention_at(j)
+        if m and role == "location" and type_of[m] == "character":
+            to = tokens[int(tokens[j]["syntactic_head_ID"])]["lemma"].lower() == "to"
+            role = "recipient" if to and speech else "location" if to else "participant"
+        if m:
+            out.append((role, m))
+    return list(dict.fromkeys(out))
 
 
 def events(doc: Dict[str, Any]) -> None:
@@ -69,10 +90,24 @@ def events(doc: Dict[str, Any]) -> None:
         inside = [m for m in candidates if m["start"] <= a and b <= m["end"]]
         return min(inside, key=lambda m: m["end"] - m["start"])["mention_id"] if inside else None
 
+    type_of = {m["mention_id"]: m["type"] for m in doc["mentions"]}
+    rel = lambda j: tokens[j]["dependency_relation"]
     for i, t in enumerate(tokens):
-        if t["event"] != "EVENT" or t["POS_tag"] != "VERB":
+        lemma = t["lemma"].lower()
+        if t["event"] == "EVENT" and t["POS_tag"] == "VERB":
+            etype = TYPE_OF.get(lemma, "OTHER")
+            if etype == "CONVERSATION" and any(tokens[j]["lemma"].lower() == "nothing" and rel(j) == "dobj"
+                                               for j in kids.get(i, [])):
+                etype = "OTHER"                                  # "Mara said nothing."
+            people = participants(i, tokens, kids, mention_at, type_of, speech=TYPE_OF.get(lemma) == "CONVERSATION")
+        elif lemma in DEAD and rel(i) == "acomp":                # "Elias Brandt was dead."
+            head = int(t["syntactic_head_ID"])
+            if any(rel(j) == "neg" for j in kids.get(head, [])):
+                continue
+            etype = "DEATH"
+            people = [("patient", m) for j in kids.get(head, []) if rel(j) == "nsubj" and (m := mention_at(j))]
+        else:
             continue
-        doc["events"].append({"event_id": f"E{len(doc['events']) + 1}", "type": TYPE_OF.get(t["lemma"].lower(), "OTHER"),
+        doc["events"].append({"event_id": f"E{len(doc['events']) + 1}", "type": etype,
                               "trigger": t["word"], "start": int(t["byte_onset"]), "end": int(t["byte_offset"]),
-                              "participants": [{"role": r, "mention_id": m}
-                                               for r, m in participants(i, tokens, kids, mention_at)]})
+                              "participants": [{"role": r, "mention_id": m} for r, m in people]})
