@@ -2,11 +2,14 @@
 format (a JSON schema, or "json" for any JSON object), so the reply always parses unless it was cut off, which raises
 instead of returning partial data."""
 import json
+import os
 import urllib.request
 from typing import Any, Dict, Union
 
 URL = "http://localhost:11434/api"
-MODEL = "nuextract2-4b"       # NuExtract 2.0 4B, registered from its GGUF (requirements.txt); chosen in Phases 5 and 7
+# NuExtract 2.0 4B, registered from its GGUF (requirements.txt); chosen in Phases 5 and 7. ORION_LLM_MODEL picks another
+# Ollama model, e.g. the 8B on a bigger GPU (extractor/notebooks/kaggle_model_comparison.ipynb)
+MODEL = os.environ.get("ORION_LLM_MODEL", "nuextract2-4b")
 NUM_CTX = 4096                # a chunk prompt is well under this; a smaller cache leaves more VRAM for the weights
 
 
