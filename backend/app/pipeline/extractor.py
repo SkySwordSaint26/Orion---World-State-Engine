@@ -3,7 +3,8 @@ Extract a chapter with the extraction pipeline (../extractor, docs/wse_extractio
 integration the plain dict it accepts (entities by name with their facts, relationships, events).
 
 The pipeline runs in its own Python 3.12 venv with torch and the GPU, so it is called as a subprocess
-(`python -m extractor run IN.txt OUT.json`) and returns an orion_gold_v1 document. It resolves mentions and
+(`python -m extractor run IN.txt OUT.json`) and returns an orion_gold_v1 document. With EXTRACTOR_URL set it is
+called over HTTP instead (`python -m extractor serve` on a remote GPU, e.g. a Kaggle notebook). It resolves mentions and
 coreference within the chapter; entities join earlier chapters by name and alias (WorldStateService).
 """
 import json
@@ -13,7 +14,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List
 
+import httpx
+
 from app.config.logging import get_logger
+from app.config.settings import settings
 from app.preprocessing import preprocess_chapter
 
 logger = get_logger(__name__)
@@ -27,8 +31,24 @@ ENTITY_TYPES = ("character", "location", "organization")
 SKIP_EVENT_TYPES = {"OTHER"}
 
 
+def run_remote_extractor(text: str, chapter_number: int) -> Dict[str, Any]:
+    """The same through `python -m extractor serve` at EXTRACTOR_URL (a remote GPU)."""
+    try:
+        reply = httpx.post(f"{settings.EXTRACTOR_URL.rstrip('/')}/extract", timeout=TIMEOUT_S,
+                           json={"story_id": f"chapter_{chapter_number}", "text": text},
+                           headers={"Authorization": f"Bearer {settings.EXTRACTOR_TOKEN}",
+                                    "ngrok-skip-browser-warning": "1"})
+    except httpx.HTTPError as e:
+        raise RuntimeError(f"Extraction failed on chapter {chapter_number}: {settings.EXTRACTOR_URL} unreachable: {e}")
+    if reply.status_code != 200:
+        raise RuntimeError(f"Extraction failed on chapter {chapter_number}: HTTP {reply.status_code}: {reply.text[-2000:]}")
+    return reply.json()
+
+
 def run_extractor(text: str, chapter_number: int) -> Dict[str, Any]:
     """Chapter text -> the extractor's gold document. Raises on any failure (the chapter then fails, nothing is stored)."""
+    if settings.EXTRACTOR_URL:
+        return run_remote_extractor(text, chapter_number)
     with tempfile.TemporaryDirectory() as tmp:
         src, out = Path(tmp) / "chapter.txt", Path(tmp) / "chapter.json"
         src.write_text(text, encoding="utf-8")
