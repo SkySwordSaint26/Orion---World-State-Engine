@@ -98,9 +98,21 @@ def test_answer_names_match_mentions_without_a_leading_article_or_title():
     assert R.name_key("Theo") == "theo"                    # only a whole leading word is dropped
 
 
+def test_titles_before_a_name_become_facts_but_honorifics_do_not():
+    t = "Doctor Hanna Weiss waved. Captain Elias Brandt left. Mr. Hale and Dr. Ross stayed. Captain Ahab"
+    names = ["Hanna Weiss", "Captain Elias Brandt", "Hale", "Ross", "Ahab"]
+    ms = [{"mention_id": f"M{i}", "text": n, "type": "character", "mention_kind": "proper", "start": t.index(n),
+           "end": t.index(n) + len(n)} for i, n in enumerate(names, 1)]
+    ms.append({**ms[0], "mention_id": "M6", "type": "location"})                  # not a character: no fact
+    assert R.title_facts({"text": t, "mentions": ms}) == [
+        ("M1", "occupation", "doctor"), ("M2", "title", "Captain"), ("M4", "occupation", "doctor"),
+        ("M5", "title", "Captain")]
+
+
 def test_fact_values_are_checked_per_property():
     t = ("I let him give the weather forecast. His moppy dark hair flew. This is Evelyn with 104.6 F.M. "
-         "I applied for a radio DJ position. I tend to my new coworker. He is recovering. A bird with human eyes.")
+         "I applied for a radio DJ position. I tend to my new coworker. He is recovering. A bird with human eyes. "
+         "Hanna examined the body. She brought bread from the bakery. She worked as a nurse.")
     parsed = spacy_nlp()(t)
     value = lambda prop, s: R.fact_value(prop, parsed.char_span(t.index(s), t.index(s) + len(s)))
     assert value("occupation", "weather") is None                     # cut from "weather forecast"
@@ -109,4 +121,7 @@ def test_fact_values_are_checked_per_property():
     assert value("eye_color", "human") is None
     assert value("location", "104.6 F.M.") is None
     assert value("occupation", "coworker") is None
+    assert value("occupation", "examined the body") is None           # an action, not a job
+    assert value("occupation", "bakery") is None                      # where the bread came from
+    assert value("occupation", "nurse") == "nurse"                    # "worked as a nurse"
     assert value("status", "recovering") == "recovering"

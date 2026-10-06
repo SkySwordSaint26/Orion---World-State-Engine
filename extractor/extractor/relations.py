@@ -3,7 +3,8 @@ Phase 5 — relationships and facts with NuExtract 2.0 4B (a Qwen2.5-VL model tu
 requirements.txt). Chosen on the 4 gold stories over qwen2.5:7b, Qwen3.5 4B and GLiNER2 spans: by far the most precise
 facts (docs/wse_extraction_plan.md, Phase 5).
 
-First, without the LLM, possessive role nouns ("my boss", "Dan’s mother") give relationships (`role_pairs`).
+First, without the LLM, possessive role nouns ("my boss", "Dan’s mother") give relationships (`role_pairs`), and
+titles before a name ("Doctor Hanna Weiss") give facts (`title_facts`).
 Then per chunk, two NuExtract calls in its own prompt layout (template, one made-up worked example, context), since
 one combined template made it return nothing:
     people         name + every fact property, all `verbatim-string` (copied from the text)
@@ -50,6 +51,14 @@ ROLES = {**_roles("WORKS_FOR", True, "boss", "employer", "manager", "supervisor"
          **_roles("ENEMY_OF", True, "enemy", "nemesis", "rival"),
          **_roles("RELATED_TO", True, "cousin", "aunt", "uncle", "niece", "nephew")}
 IMPERSONAL = {"it", "this", "that", "there", "who", "which"}      # "It was my boss": the subject isn't the boss
+# A title written before a name states a fact ("Doctor Hanna Weiss", "Captain Elias Brandt"), and NuExtract misses it.
+# Honorifics (Mr, Mrs, Sir) say nothing: left out. ponytail: English titles only, extend the map for other stories
+TITLE_FACTS = {"doctor": ("occupation", "doctor"), "dr": ("occupation", "doctor"),
+               "professor": ("occupation", "professor"), "prof": ("occupation", "professor"),
+               "detective": ("occupation", "detective"), "inspector": ("occupation", "inspector"),
+               "capt": ("title", "Captain"),
+               **{w: ("title", w.capitalize()) for w in ("captain", "general", "sergeant", "lieutenant", "colonel",
+                                                          "admiral")}}
 # Fact value checks (`fact_value`), from NuExtract's wrong answers on the gold stories (Phase 9 in the plan).
 COLORS = {"black", "brown", "dark", "blond", "blonde", "red", "auburn", "ginger", "grey", "gray", "white", "silver",
           "golden", "gold", "fair", "light", "pale", "chestnut", "copper", "green", "blue", "hazel", "amber", "violet",
@@ -153,7 +162,8 @@ def fact_value(prop: str, span: Any) -> Optional[str]:
     - colors are trimmed to their color words ("moppy dark" -> "dark"); none, no fact ("human" eyes)
     - other properties except UNCHECKED: no digits ("104.6 F.M."), and not cut from a longer noun phrase: the last
       word must not only modify a noun after the value ("weather" of "weather forecast"), except a job noun
-    - an occupation isn't a relationship word ("coworker") or a verb ("announcing")"""
+    - an occupation isn't a relationship word ("coworker"), a verb ("announcing"), an action ("examined the body") or
+      a preposition's object other than "as" ("bread from the bakery"; "worked as a nurse" is kept)"""
     if prop in ("hair_color", "eye_color"):
         words = [t for t in span if t.lower_ in COLORS]
         return span.doc.text[words[0].idx:words[-1].idx + len(words[-1])] if words else None
@@ -163,7 +173,8 @@ def fact_value(prop: str, span: Any) -> Optional[str]:
     if any(c.isdigit() for c in span.text) or (last.dep_ == "compound" and last.head.i >= span.end
                                                 and last.head.lower_ not in JOB_NOUNS):
         return None
-    if prop == "occupation" and (last.lower_ in NOT_OCCUPATIONS or last.tag_ == "VBG"):
+    if prop == "occupation" and (last.lower_ in NOT_OCCUPATIONS or last.tag_ == "VBG" or span[0].tag_.startswith("VB")
+                                 or (span.root.dep_ == "pobj" and span.root.head.lower_ != "as")):
         return None
     return span.text
 
@@ -213,6 +224,21 @@ def role_pairs(doc: Dict[str, Any], parsed: Any) -> List[Tuple[str, str, str]]:
     return out
 
 
+def title_facts(doc: Dict[str, Any]) -> List[Tuple[str, str, str]]:
+    """(mention id, property, value) for a TITLE_FACTS title just before a character's name ("Doctor Hanna Weiss")
+    or at the start of a mention that has one ("Captain Elias Brandt")."""
+    out = []
+    for m in doc["mentions"]:
+        if m["type"] != "character" or m["mention_kind"] != "proper":
+            continue
+        first = m["text"].split()[0].rstrip(".")
+        before = re.search(r"\b([A-Z][a-z]+)\.?\s+$", doc["text"][max(0, m["start"] - 20):m["start"]])
+        word = first if first.lower() in TITLE_FACTS and first != m["text"] else before.group(1) if before else ""
+        if word.lower() in TITLE_FACTS:
+            out.append((m["mention_id"], *TITLE_FACTS[word.lower()]))
+    return out
+
+
 def relations(doc: Dict[str, Any]) -> None:
     parsed = spacy_nlp()(doc["text"])
     pairs = role_pairs(doc, parsed)
@@ -236,9 +262,18 @@ def relations(doc: Dict[str, Any]) -> None:
                                          "predicate": predicate, "subject_mention_id": record(a),
                                          "object_mention_id": record(b)})
 
+    def fact(m: Dict[str, Any], prop: str, value: str) -> None:
+        key = ("F", group_of[m["mention_id"]], prop, value.casefold())
+        if key not in seen:
+            seen.add(key)
+            doc["facts"].append({"fact_id": f"F{len(doc['facts']) + 1}", "property": prop,
+                                 "entity_mention_id": record(m), "value": value})
+
     by_id = {m["mention_id"]: m for m in doc["mentions"]}
     for a, predicate, b in pairs:
         relate(by_id[a], predicate, by_id[b])
+    for mid, prop, value in title_facts(doc):          # before the LLM's facts: the backend keeps a chapter's first
+        fact(by_id[mid], prop, value)
 
     for chunk in chunk_document(document, max_chars=CHUNK_CHARS, overlap_sentences=0):
         names: Dict[str, Dict[str, Any]] = {}                       # name_key(text) -> first matching mention
@@ -258,11 +293,8 @@ def relations(doc: Dict[str, Any]) -> None:
                     continue
                 span = parsed.char_span(chunk.start + at, chunk.start + at + len(value), alignment_mode="expand")
                 value = fact_value(prop, span)
-                key = ("F", group_of[m["mention_id"]], prop, (value or "").casefold())
-                if value and key not in seen:
-                    seen.add(key)
-                    doc["facts"].append({"fact_id": f"F{len(doc['facts']) + 1}", "property": prop,
-                                         "entity_mention_id": record(m), "value": value})
+                if value:
+                    fact(m, prop, value)
 
         for r in ask(RELATIONSHIPS, chunk.text).get("relationships") or []:
             a, b = find(r.get("subject")), find(r.get("object"))
