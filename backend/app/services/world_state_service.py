@@ -57,18 +57,17 @@ class WorldStateService:
         ("Mara" / "Mara Quinn") of exactly one stored entity of the same type. Role phrases ("mother") never match:
         "her mother" in two chapters is rarely the same person."""
         names = [n for n in names if is_proper_name(n)]
-        exact = next((e for n in names
-                      if (e := self.entity_repo.get_by_canonical(world_id, n) or self.entity_repo.get_by_alias(world_id, n))),
-                     None)
+        lookup = lambda n: self.entity_repo.get_by_canonical(world_id, n) or self.entity_repo.get_by_alias(world_id, n)
+        exact = next((e for n in names if (e := lookup(n))), None)
         if exact or not names:
             return exact
         wanted = [name_words(n) for n in names]
         # ponytail: scans every entity of the world per unmatched name; index the name words if worlds grow to thousands
+        stored = lambda e: [name_words(n) for n in [e.canonical_name, *(a.alias for a in e.aliases)]
+                            if is_proper_name(n)]
         candidates = [e for e in self.entity_repo.list_with_aliases(world_id)
                       if (entity_type is None or e.entity_type == entity_type)
-                      and any(w <= s or s <= w for s in (name_words(n) for n in [e.canonical_name, *(a.alias for a in e.aliases)]
-                                                         if is_proper_name(n))
-                              for w in wanted)]
+                      and any(w <= s or s <= w for s in stored(e) for w in wanted)]
         return candidates[0] if len(candidates) == 1 else None   # "Quinn" with three Quinns stored: ambiguous, no match
 
     def integrate_extraction_result(
@@ -269,10 +268,11 @@ class WorldStateService:
             if ev_data.get("id"):
                 local_event_ids[ev_data["id"]] = ev.id
 
-            for p_name in ev_data.get("participants", []):
+            for p in ev_data.get("participants", []):   # a name, or {"name", "role"} (AGENT, PATIENT, LOCATION, ...)
+                p_name, role = (p, "PARTICIPANT") if isinstance(p, str) else (p["name"], p.get("role") or "PARTICIPANT")
                 p_ent = resolve_cached_entity(p_name)
                 if p_ent:
-                    self.event_repo.add_participant(ev.id, p_ent.id, role="PARTICIPANT", commit=False)
+                    self.event_repo.add_participant(ev.id, p_ent.id, role=role, commit=False)
 
         # 4. Consistency Checks (Temporal & Cycles)
         detected_cons = self.consistency_service.run_checks(

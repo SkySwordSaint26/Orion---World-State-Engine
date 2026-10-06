@@ -12,22 +12,24 @@ PARSE = [("I", "I", "PRON", "nsubj", 1, "O"), ("ran", "run", "VERB", "ROOT", 1, 
          ("Noise", "noise", "NOUN", "ROOT", 10, "EVENT"), (".", ".", "PUNCT", "punct", 10, "O")]
 
 
-def tokens():
+def tokens(text=TEXT, parse=PARSE):
     out, cursor = [], 0
-    for word, lemma, pos, dep, head, event in PARSE:
-        a = TEXT.index(word, cursor)
+    for word, lemma, pos, dep, head, event in parse:
+        a = text.index(word, cursor)
         cursor = a + len(word)
         out.append({"word": word, "lemma": lemma, "POS_tag": pos, "dependency_relation": dep,
                     "syntactic_head_ID": str(head), "event": event, "byte_onset": str(a), "byte_offset": str(cursor)})
     return out
 
 
-def mention(mid, s, kind="nominal"):
-    a = TEXT.index(s)
-    return {"mention_id": mid, "text": s, "type": "character", "mention_kind": kind, "start": a, "end": a + len(s)}
+def mention(mid, s, kind="nominal", t="character", text=TEXT, nth=0):
+    a = -1
+    for _ in range(nth + 1):
+        a = text.index(s, a + 1)
+    return {"mention_id": mid, "text": s, "type": t, "mention_kind": kind, "start": a, "end": a + len(s)}
 
 
-MENTIONS = [mention("M1", "I", "pronominal"), mention("M2", "desk"), mention("M3", "my", "pronominal"),
+MENTIONS = [mention("M1", "I", "pronominal"), mention("M2", "desk", t="location"), mention("M3", "my", "pronominal"),
             mention("M4", "boss")]
 
 
@@ -45,6 +47,38 @@ def test_verb_triggers_typed_by_lexicon_with_dependency_participants(monkeypatch
         ("ran", "OTHER", "ran", [("agent", "M1"), ("location", "M2")]),       # place preposition -> location
         ("called", "CONVERSATION", "called", [("agent", "M1"), ("patient", "M4")])]   # shared subject; "my" skipped
     # "Noise" is a BookNLP event but a noun: not a trigger
+
+
+def test_conjoined_subjects_people_after_to_a_stated_death_and_saying_nothing(monkeypatch):
+    t = ("Mara, Tobias and Lily climbed. Mara said nothing to Hanna. Brandt was dead. Brandt was not dead. "
+         "Mara ran to Hanna.")
+    parse = [("Mara", "Mara", "PROPN", "nsubj", 5, "O"), (",", ",", "PUNCT", "punct", 0, "O"),
+             ("Tobias", "Tobias", "PROPN", "conj", 0, "O"), ("and", "and", "CCONJ", "cc", 2, "O"),
+             ("Lily", "Lily", "PROPN", "conj", 2, "O"), ("climbed", "climb", "VERB", "ROOT", 5, "EVENT"),
+             (".", ".", "PUNCT", "punct", 5, "O"),
+             ("Mara", "Mara", "PROPN", "nsubj", 8, "O"), ("said", "say", "VERB", "ROOT", 8, "EVENT"),
+             ("nothing", "nothing", "PRON", "dobj", 8, "O"), ("to", "to", "ADP", "prep", 8, "O"),
+             ("Hanna", "Hanna", "PROPN", "pobj", 10, "O"), (".", ".", "PUNCT", "punct", 8, "O"),
+             ("Brandt", "Brandt", "PROPN", "nsubj", 14, "O"), ("was", "be", "AUX", "ROOT", 14, "O"),
+             ("dead", "dead", "ADJ", "acomp", 14, "O"), (".", ".", "PUNCT", "punct", 14, "O"),
+             ("Brandt", "Brandt", "PROPN", "nsubj", 18, "O"), ("was", "be", "AUX", "ROOT", 18, "O"),
+             ("not", "not", "PART", "neg", 18, "O"), ("dead", "dead", "ADJ", "acomp", 18, "O"),
+             (".", ".", "PUNCT", "punct", 18, "O"),
+             ("Mara", "Mara", "PROPN", "nsubj", 23, "O"), ("ran", "run", "VERB", "ROOT", 23, "EVENT"),
+             ("to", "to", "ADP", "prep", 23, "O"), ("Hanna", "Hanna", "PROPN", "pobj", 24, "O"),
+             (".", ".", "PUNCT", "punct", 23, "O")]
+    monkeypatch.setattr(E, "booknlp_output", lambda text: (tokens(t, parse), []))
+    ms = [mention(f"M{i}", name, "proper", text=t, nth=nth) for i, (name, nth) in
+          enumerate([("Mara", 0), ("Tobias", 0), ("Lily", 0), ("Mara", 1), ("Hanna", 0), ("Brandt", 0), ("Mara", 2),
+                     ("Hanna", 1)], 1)]
+    d = {"text": t, **{k: [] for k in LISTS}, "mentions": ms}
+    E.events(d)
+    found = [(e["trigger"], e["type"], [(p["role"], p["mention_id"]) for p in e["participants"]]) for e in d["events"]]
+    assert found == [
+        ("climbed", "TRAVEL", [("agent", "M1"), ("agent", "M2"), ("agent", "M3")]),   # every conjunct
+        ("said", "OTHER", [("agent", "M4"), ("recipient", "M5")]),     # nothing said; "to Hanna" is no place
+        ("dead", "DEATH", [("patient", "M6")]),                        # "was not dead": no event
+        ("ran", "OTHER", [("agent", "M7"), ("location", "M8")])]       # a movement's goal stays a location
 
 
 def test_entity_level_arguments_credit_a_pronoun_through_its_cluster():

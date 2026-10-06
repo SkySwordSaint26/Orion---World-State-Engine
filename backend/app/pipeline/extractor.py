@@ -81,9 +81,10 @@ def to_legacy(doc: Dict[str, Any], chapter_number: int) -> Dict[str, Any]:
     for e in doc["events"]:
         if e["type"] in SKIP_EVENT_TYPES:
             continue
-        people = [names[g] for p in e["participants"] if (g := group_of.get(p["mention_id"])) in names]
+        people = [(names[g], p["role"].upper()) for p in e["participants"]
+                  if (g := group_of.get(p["mention_id"])) in names]
         events.append({"id": e["event_id"], "type": e["type"], "evidence": sentence_at(e["start"]),
-                       "participants": list(dict.fromkeys(people))})
+                       "participants": [{"name": n, "role": r} for n, r in dict.fromkeys(people)]})
     kept = {e["id"] for e in events}
     temporal = [{"event_1": t["source_event_id"], "relation": t["relation"], "event_2": t["target_event_id"]}
                 for t in doc["temporal_relations"] if {t["source_event_id"], t["target_event_id"]} <= kept]
