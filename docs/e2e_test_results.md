@@ -8,6 +8,10 @@
 > contradictions found** (was 0), still no false alarms. The 8 real people, places and groups are now 8 entries
 > (was 19). See [section 8](#8-re-run-after-the-name-linking-fix-3-october-2026). Sections 1–7 describe the
 > original run and are left as they were.
+>
+> **Update, 6 October 2026: fixes 3 and 5 are done.** **All 5 contradictions are now found**, and 4 of the 5
+> planted relationships (was 0). Titles are saved as facts: Hanna is a doctor and Brandt is a Captain. See
+> [section 9](#9-re-run-after-the-relationship-and-title-fixes-6-october-2026).
 
 ## The short version
 
@@ -220,11 +224,11 @@ time before it can read a single sentence, and then runs several models one afte
    person has that first name; drop titles like "Captain" and "Doctor" before comparing. This one change would
    likely bring back 4 of the 5 missed contradictions.
 2. ✅ *Done 3 Oct 2026, see section 8.* **Accept more ways of writing "alive" and "dead"**, such as "alive and well", "survived", "drowned".
-3. **Improve relationships**: sentences like "her daughter, X", "X's brother, Y", "X was Y's enemy" and "X worked
+3. ✅ *Mostly done 6 Oct 2026, see section 9.* **Improve relationships**: sentences like "her daughter, X", "X's brother, Y", "X was Y's enemy" and "X worked
    for Y". Also point role words ("uncle", "oldest friend") at the named person they refer to.
-4. **Keep the extractor running between chapters** instead of starting it fresh each time, so the models load
+4. *Deferred: speed is out of scope for now.* **Keep the extractor running between chapters** instead of starting it fresh each time, so the models load
    only once. This is the biggest part of the 35 seconds.
-5. **Read titles as facts**: "Doctor" → occupation, "Captain" → title.
+5. ✅ *Done 6 Oct 2026, see section 9.* **Read titles as facts**: "Doctor" → occupation, "Captain" → title.
 
 ## 7. How to run this test again
 1. Start the app: `./start.sh`, or start the API on its own with
@@ -298,3 +302,60 @@ Contradictions found:
   extracted again.
 - **Two people with the same first name** could still be merged when only one of them is saved so far. The
   "exactly one fits" rule limits this but does not rule it out.
+
+## 9. Re-run after the relationship and title fixes (6 October 2026)
+
+**What changed** (fixes 3 and 5 from section 6, all in the extractor):
+
+- **Short names inside a name's cluster are kept.** The coreference model (BookNLP) already knew that "Mara" in
+  "Mara's brother" and "Mara's enemy" is Mara Quinn, but the extractor threw those "Mara" mentions away, because
+  mention detection had only found the full name. Without a "Mara" mention, the possessive rule had nothing to
+  hang "brother" or "enemy" on, so it skipped both sentences. A proper name in a cluster with an already-found
+  mention is now kept (`extractor/extractor/coref.py`). This was the main cause of Failure 3.
+- **"X's brother, Y" points at Y.** A role word followed (or preceded) by a name, as in "Mara's brother, Tobias
+  Quinn", now links to that name instead of creating a new person called "Mara's brother".
+- **The LLM's answers are matched without "the" and titles.** The model answered "Doctor Hanna Weiss works for
+  the Harbor Council", but the found names are "Hanna Weiss" and "Harbor Council", so the answer was thrown
+  away. Names are now compared without a leading "the"/"a" or a title.
+- **Titles before a name are saved as facts.** "Doctor Hanna Weiss" → occupation *doctor*; "Captain Elias
+  Brandt" → title *Captain*. Also Dr, Professor, Detective, Inspector, General, Sergeant, Lieutenant, Colonel and
+  Admiral. Mr, Mrs and Sir are not facts and are ignored.
+- **Fewer wrong occupations.** An occupation that starts with a verb ("examined the body") or that is the object
+  of a preposition ("brought bread *from the bakery*") is no longer saved. "worked *as* a nurse" still counts.
+
+**How it was run:** the same as section 8: the story through the real extractor and extraction task, on a
+scratch SQLite database. The 4 annotated gold stories were also re-scored, to check that nothing got worse.
+
+| Area | 30 Sep | 3 Oct | 6 Oct |
+|---|---|---|---|
+| Contradictions | 0 of 5 | 4 of 5 | **5 of 5** |
+| False alarms | 0 | 0 | 0 |
+| Planted relationships | 0 of 5 | 0 of 5 | **4 of 5** |
+| Planted facts | 12 of 15 | not measured | **14 of 15** (only "lighthouse keeper" missing) |
+| Wrong occupation values | 2 ("examined the body", "bakery") | not measured | **0** |
+
+Relationships found:
+
+| Planted relationship | Result |
+|---|---|
+| Mara and Tobias are siblings | ✅ Mara SIBLING_OF Tobias Quinn |
+| Brandt is Mara's enemy | ✅ Mara ENEMY_OF Elias Brandt |
+| Hanna works for the Harbor Council | ✅ Hanna WORKS_FOR Harbor Council |
+| Brandt is Mara's friend (ch 4) | ✅ Mara FRIEND_OF Elias Brandt, flagged as a contradiction of "enemy" |
+| Mara is Lily's parent | ❌ see below |
+
+**Gold stories (micro F1, before → after):** mentions 0.573 → 0.575, coreference B³ 0.482 → 0.486, coreference
+B³ on linked mentions 0.744 → 0.755. Relationships (0.533) and facts (0.609) did not change. Nothing got worse.
+
+**Still open:**
+
+- **"Her daughter, Lily Quinn" (Mara is Lily's parent).** The coreference model links this "Her" to "her mother"
+  in the sentence before, not to Mara. With the wrong owner, no rule can recover the relationship. This needs
+  better coreference, not another rule.
+- **Role words without a name.** "her uncle" (Lily's uncle, ch 3) and "her mother" (ch 1 and ch 3) are still
+  saved as unnamed "uncle"/"mother" entries. "mother PARENT_OF Lily" (ch 3) is still wrong: it should be Mara.
+- **"Mara is a lighthouse keeper"** ("had kept the lighthouse") is still missed: the LLM doesn't read a job from
+  a verb.
+- **A title is saved again in every chapter that uses it.** "Captain" for Brandt has 3 active versions with the
+  same value, one per chapter. This is how the backend already stores a repeated value; it's harmless but untidy.
+- **Speed (Failure 7)** is deferred: correctness comes first for now.

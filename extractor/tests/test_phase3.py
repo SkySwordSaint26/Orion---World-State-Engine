@@ -37,6 +37,16 @@ def test_link_adds_typed_pronouns_and_skips_untypable_or_orphan_chains():
     assert len(d["mentions"]) == 6                        # no orphan pronoun from the skipped chains
 
 
+def test_link_adds_a_short_name_clustered_with_a_detected_name_but_not_an_unanchored_one():
+    t = "Mara Quinn kept the light. Mara's brother rowed. Hanna waved. Hanna smiled."
+    d = doc(t, [mention(t, "M1", "Mara Quinn", "character", kind="proper")])
+    link(d, [[at(t, "Mara Quinn"), at(t, "Mara", 1)],       # the short name joins the detected full name
+             [at(t, "Hanna"), at(t, "Hanna", 1)]])          # no detected mention to type it by: skipped
+    assert [(m["text"], m["type"], m["mention_kind"]) for m in d["mentions"]] == [
+        ("Mara Quinn", "character", "proper"), ("Mara", "character", "proper")]
+    assert d["coreference_clusters"] == [{"cluster_id": "C1", "mentions": ["M1", "M2"]}]
+
+
 def test_merge_joins_repeats_and_existing_clusters_but_not_other_types():
     t = "trees and trees near the trees; the Trees shop."
     d = doc(t, [mention(t, "M1", "trees", "other"), mention(t, "M2", "trees", "other", 1),
