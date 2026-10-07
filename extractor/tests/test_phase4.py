@@ -88,3 +88,34 @@ def test_entity_level_arguments_credit_a_pronoun_through_its_cluster():
     pred = doc(clusters=[["M1", "M4"]], events=[{**gold_event, "participants": [{"role": "agent", "mention_id": "M1"}]}])
     s = score(pred, gold)
     assert s["event_arguments"]["f1"] == 0.0 and s["event_arguments_entity"]["f1"] == 1.0
+
+
+def test_llm_types_is_off_by_default_and_retypes_by_mode(monkeypatch):
+    text = "Mara said hello and ran home. She slept."
+    event = lambda eid, word, etype: {"event_id": eid, "type": etype, "trigger": word, "start": text.index(word),
+                                      "end": text.index(word) + len(word), "participants": []}
+    fresh = lambda: {"text": text, "events": [event("E1", "said", "CONVERSATION"), event("E2", "ran", "OTHER"),
+                                              event("E3", "slept", "OTHER")]}
+    asked = []
+
+    def generate(system, user, schema, num_predict, model):
+        asked.append((user, schema["required"], model))
+        return {i: "TRAVEL" for i in schema["required"]}
+
+    monkeypatch.setattr(E, "generate", generate)
+    doc = fresh()
+    E.llm_types(doc)                                                    # ORION_EVENT_LLM unset: no calls
+    assert asked == [] and [e["type"] for e in doc["events"]] == ["CONVERSATION", "OTHER", "OTHER"]
+
+    monkeypatch.setattr(E, "EVENT_LLM", "qwen2.5:14b")
+    E.llm_types(doc)                                                    # "all": every trigger, one call per sentence
+    assert asked == [("Mara [T1 said] hello and [T2 ran] home.", ["T1", "T2"], "qwen2.5:14b"),
+                     ("She [T1 slept].", ["T1"], "qwen2.5:14b")]
+    assert [e["type"] for e in doc["events"]] == ["TRAVEL", "TRAVEL", "TRAVEL"]
+
+    monkeypatch.setattr(E, "EVENT_LLM_MODE", "other")
+    asked.clear()
+    doc = fresh()
+    E.llm_types(doc)                                                    # "other": the lexicon's types stay
+    assert [a[0] for a in asked] == ["Mara said hello and [T1 ran] home.", "She [T1 slept]."]
+    assert [e["type"] for e in doc["events"]] == ["CONVERSATION", "TRAVEL", "TRAVEL"]
