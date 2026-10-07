@@ -1,0 +1,185 @@
+// Orion: end-to-end data flow, from manuscript upload to the stored world state.
+// Paste into eraser.io -> new diagram -> "Diagram as code" (Flow chart).
+// Extractor internals: 2_extractor_pipeline.eraser. LLM calls: 3_llm_calls_sequence.eraser.
+
+title Orion World-State Engine - system data flow
+direction right
+colorMode pastel
+styleMode shadow
+typeface clean
+
+Author [icon: user, color: gray]
+
+Backend API [icon: server, color: blue] {
+  Upload manuscript [icon: upload, label: "POST /worlds/id/manuscripts"]
+  Edit chapter [icon: edit, label: "PUT /worlds/id/chapters/id"]
+  Read endpoints [icon: eye, label: "GET entities / graph / timeline / contradictions / jobs"]
+  Chat endpoint [icon: message-circle, label: "POST /worlds/id/chat"]
+}
+
+Ingest ManuscriptService [icon: inbox, color: blue] {
+  Parse file [icon: file-text, label: "Parse file: docx python-docx / pdf PyPDF2 / txt utf-8"]
+  Split chapters [icon: scissors, label: "split_into_chapters: headings or 1 chapter"]
+  Create job rows [icon: list, label: "Manuscript + Chapter + ChapterVersion v1 + ProcessingJob QUEUED + ExtractionRun PENDING per chapter"]
+  New chapter version [icon: git-commit, label: "ChapterService: new ChapterVersion + job + PENDING run"]
+}
+
+Dispatch [icon: send, color: purple] {
+  Executor choice [shape: diamond, label: "EXTRACTION_EXECUTOR"]
+  BackgroundTasks [icon: zap, label: "FastAPI BackgroundTasks (local dev)"]
+  Redis broker [shape: cylinder, icon: database]
+  Celery worker [icon: cpu, label: "Celery task run_extraction_job"]
+  Job runner [icon: list, label: "run_extraction_job: runs in ascending chapter order"]
+  Abort later runs [icon: x-octagon, color: red, label: "abort_pending_runs: later chapters FAILED (skipped)"]
+}
+
+Chapter run [icon: play, color: purple] {
+  Claim run [icon: lock, label: "Claim run atomically: PENDING to PROCESSING"]
+  Load text [icon: file-text, label: "Read ChapterVersion content file"]
+  Extractor mode [shape: diamond, label: "EXTRACTOR_URL set?"]
+  Local subprocess [icon: terminal, label: "Subprocess: extractor/.venv python -m extractor run IN.txt OUT.json (900 s timeout)"]
+  Remote HTTP [icon: globe, label: "httpx POST EXTRACTOR_URL/extract + Bearer EXTRACTOR_TOKEN"]
+}
+
+Remote GPU Kaggle [icon: cloud, color: orange] {
+  Ngrok tunnel [icon: link, label: "ngrok static domain"]
+  Serve endpoint [icon: server, label: "serve.py: bearer check + one-at-a-time GPU lock"]
+}
+
+Extractor [icon: cpu, color: orange] {
+  Extract stages [icon: layers, label: "extract(): 9 stages - see diagram 2"]
+  Encoders [icon: box, color: green, label: "GLiNER2 large + BookNLP big + spaCy sm"]
+  Ollama [icon: cpu, label: "Ollama /api/chat"]
+  NuExtract [icon: aperture, label: "NuExtract 2.0 4B Q4 (ORION_LLM_MODEL)"]
+  Event typing LLM [icon: aperture, color: gray, label: "Optional event-typing LLM (ORION_EVENT_LLM)"]
+  Schema check [shape: diamond, label: "valid orion_gold_v1?"]
+  Gold document [shape: document, icon: file, label: "orion_gold_v1 JSON: mentions / clusters / events / temporal / relationships / facts"]
+}
+
+Adapter to_legacy [icon: shuffle, color: teal] {
+  Group entities [label: "One entity per coref cluster or lone mention; char/loc/org with a proper name or a fact/relationship"]
+  Canonical name [label: "Name = most frequent proper name (shorter on tie); other proper names = aliases"]
+  Attach facts [label: "Facts to attributes: first value per property"]
+  Name relationships [label: "Relationships as subject/predicate/object names"]
+  Filter events [label: "Drop OTHER events; evidence = sentence; participants = name + role"]
+  Keep temporal [label: "Temporal relations whose two events were kept"]
+  Legacy dict [shape: document, label: "entities / relationships / events / temporal_relations"]
+}
+
+Integration transaction [icon: shield, color: green] {
+  Lock world [icon: lock, label: "Lock world row (SELECT FOR UPDATE)"]
+  Predecessor gate [shape: diamond, label: "Earlier chapters DONE?"]
+  Resolve entities [icon: users, label: "find_entity by every name+alias or create; add aliases + mention"]
+  Write facts [label: "Fact + new FactVersion ACTIVE"]
+  Write relationships [label: "Relationship + new RelationshipVersion ACTIVE"]
+  Write events [label: "Event + participants with roles"]
+  Run checks [label: "run_checks: temporal relations + cycles"]
+  Commit DONE [icon: check-circle, color: green, label: "Run DONE + single commit"]
+  Rollback FAILED [icon: x-circle, color: red, label: "Rollback; run FAILED; job rollup"]
+}
+
+Consistency engine [icon: alert-triangle, color: yellow] {
+  Fact rules [label: "ImmutableFact / AgeMonotonic / DeadThenAlive"]
+  Relationship rules [label: "IncompatiblePredicate / SingleValuedIncoming"]
+  Temporal rules [label: "TemporalCycle"]
+  Verdict [shape: diamond, label: "Findings?"]
+  Contradicted [color: red, label: "New version CONTRADICTED + Contradiction row; old stays ACTIVE"]
+  Superseded [label: "Value changed: old version SUPERSEDED"]
+}
+
+Storage [icon: database, color: gray] {
+  File store [shape: cylinder, icon: hard-drive, label: "Files: originals + chapter texts"]
+  Database [shape: cylinder, icon: database, label: "SQLAlchemy DB (PostgreSQL / SQLite)"]
+}
+
+Chat [icon: message-square, color: gray] {
+  Chat context [label: "ChatService: 25 entities + 20 relationships + 15 events + open contradictions"]
+  LLM client [shape: diamond, label: "LLM_PROVIDER"]
+  Chat Ollama [icon: aperture, label: "Ollama qwen2.5:7b"]
+  Chat OpenAI [icon: aperture, label: "OpenAI OPENAI_MODEL"]
+  Chat mock [label: "Mock answer (fallback)"]
+}
+
+// ---- ingest
+Author > Upload manuscript: file
+Author > Edit chapter: new text
+Author > Read endpoints
+Author > Chat endpoint: question
+Upload manuscript > Parse file
+Parse file > File store: original
+Parse file > Split chapters
+Split chapters > Create job rows
+Create job rows > File store: chapter texts
+Create job rows > Database
+Edit chapter > New chapter version
+New chapter version > Database
+
+// ---- dispatch: one ordered job, never single chapters
+Create job rows > Executor choice: job_id
+New chapter version > Executor choice: job_id
+Executor choice > BackgroundTasks: background
+Executor choice > Redis broker: celery
+Redis broker > Celery worker
+BackgroundTasks > Job runner
+Celery worker > Job runner
+Job runner > Claim run: next PENDING chapter
+Job runner > Abort later runs: a chapter failed
+
+// ---- one chapter
+Claim run > Load text
+File store > Load text
+Load text > Extractor mode
+Extractor mode > Local subprocess: no
+Extractor mode > Remote HTTP: yes
+Remote HTTP > Ngrok tunnel
+Ngrok tunnel > Serve endpoint
+Serve endpoint > Extract stages
+Local subprocess > Extract stages: same process on local GPU
+Extract stages <> Encoders
+Extract stages <> Ollama: JSON-constrained prompts
+Ollama <> NuExtract: facts + relationships
+Ollama <> Event typing LLM: re-type events (off by default)
+Extract stages > Schema check
+Schema check > Gold document: yes
+Schema check > Rollback FAILED: no - ValueError
+Gold document > Group entities: JSON back to backend
+
+// ---- adapter
+Group entities > Canonical name
+Canonical name > Attach facts
+Attach facts > Name relationships
+Name relationships > Filter events
+Filter events > Keep temporal
+Keep temporal > Legacy dict
+
+// ---- integrate (all or nothing)
+Legacy dict > Lock world
+Lock world > Predecessor gate
+Predecessor gate > Rollback FAILED: no - ChapterOrderError
+Predecessor gate > Resolve entities: yes
+Resolve entities > Write facts
+Write facts > Fact rules
+Resolve entities > Write relationships
+Write relationships > Relationship rules
+Resolve entities > Write events
+Write events > Run checks
+Run checks > Temporal rules
+Fact rules > Verdict
+Relationship rules > Verdict
+Temporal rules > Verdict
+Verdict > Contradicted: yes
+Verdict > Superseded: no + value changed
+Write events > Commit DONE
+Commit DONE > Database: chapter world state
+Rollback FAILED > Database: run status only
+Rollback FAILED > Job runner: stop job
+Commit DONE > Job runner: next chapter
+
+// ---- reads + chat
+Database > Read endpoints
+Chat endpoint > Chat context
+Database > Chat context
+Chat context > LLM client
+LLM client > Chat Ollama: ollama
+LLM client > Chat OpenAI: openai
+LLM client > Chat mock: mock or both failed

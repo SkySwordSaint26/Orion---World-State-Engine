@@ -1,0 +1,69 @@
+// Orion: every LLM call during one chapter's extraction, in order (Sequence diagram).
+// Paste into eraser.io -> "Diagram as code" -> Sequence diagram.
+// Code: backend/app/pipeline/extractor.py, extractor/extractor/{serve,pipeline,events,relations,llm}.py
+
+title LLM call sequence for one chapter
+autoNumber on
+
+Job runner [icon: list, color: purple]
+Extractor client [icon: send, color: blue]
+Serve or CLI [icon: server, color: orange]
+Pipeline [icon: layers, color: orange]
+Encoders [icon: box, color: green]
+llm generate [icon: code, color: orange]
+Ollama [icon: cpu, color: orange]
+Grounding [icon: shield, color: gray]
+
+Job runner > Extractor client: extract_chapter(text + chapter_number)
+alt [label: EXTRACTOR_URL set, color: orange] {
+  Extractor client > Serve or CLI: POST /extract + Bearer token (ngrok to Kaggle GPU)
+  Serve or CLI > Serve or CLI: check token; take the GPU lock
+}
+else [label: local, color: blue] {
+  Extractor client > Serve or CLI: subprocess python -m extractor run IN.txt OUT.json
+}
+Serve or CLI > Pipeline: extract(story_id + text)
+
+// GPU handoff: one 6 GB card holds the encoders or the LLM, never both
+Pipeline > Ollama: release_llm - GET /api/ps
+Pipeline > Ollama: POST /api/generate keep_alive 0 for every loaded model
+
+Pipeline > Encoders: mentions / coref / events / temporal (no LLM)
+Encoders > Pipeline: mentions + clusters + events + temporal lists
+Pipeline > Encoders: release_encoders - cache_clear + cuda.empty_cache
+
+opt [label: ORION_EVENT_LLM set - off by default, color: gray] {
+  loop [label: each sentence with triggers] {
+    Pipeline > llm generate: TYPING_SYSTEM + sentence with T1 / T2 marks; schema = one EVENT_TYPES enum per trigger
+    llm generate > Ollama: POST /api/chat model ORION_EVENT_LLM; temp 0; num_ctx 4096; num_predict 512
+    Ollama > llm generate: JSON object (constrained to the schema)
+    llm generate > Pipeline: T1 = type ...; retype those events
+  }
+}
+
+Pipeline > Pipeline: role_pairs + title_facts (spaCy rules; no LLM)
+
+loop [label: each 2000-char chunk with character or organization mentions, color: orange] {
+  Pipeline > llm generate: NuExtract layout - Template people + worked Example + Context chunk
+  llm generate > Ollama: POST /api/chat model nuextract2-4b; format json; temp 0; num_predict 1024
+  Ollama > llm generate: people with name + 11 verbatim fact properties
+  alt [label: done_reason = length, color: red] {
+    llm generate > Pipeline: RuntimeError - reply cut off (chapter fails)
+  }
+  llm generate > Grounding: people JSON
+  Grounding > Grounding: name is a chunk mention; value is in chunk; at most 40 chars; color / digit / occupation checks
+  Grounding > Pipeline: facts (deduped per entity + property + value)
+
+  Pipeline > llm generate: Template relationships (subject / relation enum / object / evidence) + Example + Context
+  llm generate > Ollama: POST /api/chat model nuextract2-4b; format json
+  Ollama > llm generate: relationships JSON
+  llm generate > Grounding: relationships JSON
+  Grounding > Grounding: both ends are mentions; evidence is a quote naming both + a cue word; no self
+  Grounding > Pipeline: relationships (canonical form; deduped)
+}
+
+Pipeline > Ollama: release_llm - keep_alive 0 (GPU back for the next chapter)
+Pipeline > Pipeline: schema_errors vs orion_gold_v1
+Pipeline > Serve or CLI: gold document (or ValueError)
+Serve or CLI > Extractor client: JSON (HTTP 200 / OUT.json) or error (HTTP 500 / exit code)
+Extractor client > Job runner: to_legacy dict then integrate in one transaction

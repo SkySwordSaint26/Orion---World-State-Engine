@@ -2,7 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { useWorldStore } from '../store/useWorldStore';
-import { forceSimulation, forceManyBody, forceLink, forceCenter, forceCollide } from 'd3-force';
+// import { forceSimulation, forceManyBody, forceLink, forceCenter, forceCollide } from 'd3-force';
+import {
+  forceSimulation,
+  forceManyBody,
+  forceCenter,
+  forceCollide
+} from 'd3-force';
 import { apiFetch } from '../api/client';
 
 interface Node {
@@ -15,11 +21,17 @@ interface Node {
   y: number;
 }
 
+// interface Edge {
+//   from: string;
+//   to: string;
+//   source?: string | Node;
+//   target?: string | Node;
+//   color: string;
+//   dashed?: boolean;
+// }
 interface Edge {
   from: string;
   to: string;
-  source?: string | Node;
-  target?: string | Node;
   color: string;
   dashed?: boolean;
 }
@@ -58,9 +70,28 @@ export const WorldGraph: React.FC = () => {
             };
           });
 
+          // const fetchedEdges = (data.edges || []).map((rel: any) => ({
+          //   from: rel.source || rel.from,
+          //   to: rel.target || rel.to,
+          //   color: rel.type === 'ENEMY_OF' ? '#ffb4ab' : '#E6A27E',
+          //   dashed: rel.type === 'ENEMY_OF'
+          // }));
+
+          // const simulation = forceSimulation(fetchedNodes)
+          //   .force('charge', forceManyBody().strength(-400))
+          //   .force('center', forceCenter(400, 300))
+          //   .force('collide', forceCollide().radius(60))
+          //   .force('link', forceLink(fetchedEdges).id((d: any) => d.id).distance(150))
+          //   .stop();
+
+          // for (let i = 0; i < 300; ++i) simulation.tick();
+
+          // setNodes([...fetchedNodes]);
+          // setEdges(fetchedEdges);
+
           const fetchedEdges = (data.edges || []).map((rel: any) => ({
-            from: rel.source || rel.from,
-            to: rel.target || rel.to,
+            from: rel.source,
+            to: rel.target,
             color: rel.type === 'ENEMY_OF' ? '#ffb4ab' : '#E6A27E',
             dashed: rel.type === 'ENEMY_OF'
           }));
@@ -69,10 +100,11 @@ export const WorldGraph: React.FC = () => {
             .force('charge', forceManyBody().strength(-400))
             .force('center', forceCenter(400, 300))
             .force('collide', forceCollide().radius(60))
-            .force('link', forceLink(fetchedEdges).id((d: any) => d.id).distance(150))
             .stop();
 
-          for (let i = 0; i < 300; ++i) simulation.tick();
+          for (let i = 0; i < 300; ++i) {
+            simulation.tick();
+          }
 
           setNodes([...fetchedNodes]);
           setEdges(fetchedEdges);
