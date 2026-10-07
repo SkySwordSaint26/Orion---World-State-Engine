@@ -28,6 +28,12 @@ from app.models.world import World
 from app.pipeline import extractor
 from app.services.manuscript_service import ManuscriptService
 from app.services.world_state_service import WorldStateService
+
+
+@pytest.fixture(autouse=True)
+def local_extractor(monkeypatch):
+    """Tests run the local extractor path whatever backend/.env says (EXTRACTOR_URL would send them to a remote GPU)."""
+    monkeypatch.setattr(settings, "EXTRACTOR_URL", "")
 from app.workers.tasks import extraction_task, job_update_task
 
 

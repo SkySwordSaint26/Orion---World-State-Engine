@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     # "background" runs the same ordered job in-process via FastAPI BackgroundTasks (local dev, no Redis).
     EXTRACTION_EXECUTOR: str = "background"  # celery | background
 
+    # Remote extractor (python -m extractor serve, e.g. on a Kaggle GPU behind ngrok). Unset: the local subprocess.
+    EXTRACTOR_URL: str = ""      # e.g. https://<static-domain>.ngrok-free.app
+    EXTRACTOR_TOKEN: str = ""    # the server's ORION_EXTRACTOR_TOKEN
+
     # File Storage
     STORAGE_DIR: str = "./storage"
 

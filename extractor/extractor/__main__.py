@@ -10,6 +10,9 @@ Command line (run from extractor/ with its venv):
     python -m extractor run IN.txt OUT.json [--story-id ID]
         extracts one chapter's text -> OUT.json (the backend's extraction calls this)
 
+    python -m extractor serve [--port 8000]
+        the same over HTTP for a remote backend (extractor/serve.py; needs ORION_EXTRACTOR_TOKEN)
+
 GOLD is produced by the backend converter (from backend/):
     python -m app.evaluation convert ../accounts_from_a_lonely_broadcast_station_orion_annotation/*.json \
         --text-dir "../Accounts From a Lonely Broadcast Station" --out-dir ../extractor/data/gold
@@ -65,6 +68,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    from extractor.serve import serve
+    serve(args.port)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m extractor", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -80,8 +89,10 @@ def main(argv=None) -> int:
     r.add_argument("input")
     r.add_argument("output")
     r.add_argument("--story-id")
+    v = sub.add_parser("serve")
+    v.add_argument("--port", type=int, default=8000)
     args = ap.parse_args(argv)
-    return {"predict": cmd_predict, "score": cmd_score, "run": cmd_run}[args.cmd](args)
+    return {"predict": cmd_predict, "score": cmd_score, "run": cmd_run, "serve": cmd_serve}[args.cmd](args)
 
 
 if __name__ == "__main__":
