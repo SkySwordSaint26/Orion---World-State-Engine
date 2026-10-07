@@ -19,8 +19,9 @@ def _post(path: str, body: Dict[str, Any], timeout: int) -> Dict[str, Any]:
         return json.load(response)
 
 
-def generate(system: str, user: str, schema: Union[Dict[str, Any], str], num_predict: int = 1024) -> Dict[str, Any]:
-    body = {"model": MODEL, "stream": False, "format": schema,
+def generate(system: str, user: str, schema: Union[Dict[str, Any], str], num_predict: int = 1024,
+             model: str = MODEL) -> Dict[str, Any]:
+    body = {"model": model, "stream": False, "format": schema,
             "options": {"temperature": 0, "num_ctx": NUM_CTX, "num_predict": num_predict},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
     reply = _post("chat", body, 600)
