@@ -87,7 +87,7 @@ Models [icon: cpu, color: gray] {
   BookNLP model [icon: box, color: green, label: "BookNLP big (fiction-trained)"]
   spaCy model [icon: box, color: green, label: "spaCy en_core_web_sm (no NER)"]
   Ollama server [icon: server, color: orange, label: "Ollama localhost:11434 /api/chat; temp 0; num_ctx 4096"]
-  NuExtract model [icon: aperture, color: orange, label: "nuextract2-4b GGUF Q4_K_M (ORION_LLM_MODEL; 8B on Kaggle)"]
+  NuExtract model [icon: aperture, color: orange, label: "nuextract2-4b GGUF Q4_K_M (ORION_LLM_MODEL)"]
 }
 
 Truncation [color: red, label: "done_reason = length: RuntimeError (never partial JSON)"]

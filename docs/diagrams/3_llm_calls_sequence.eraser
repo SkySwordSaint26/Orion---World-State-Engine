@@ -1,13 +1,13 @@
 // Orion: every LLM call during one chapter's extraction, in order (Sequence diagram).
 // Paste into eraser.io -> "Diagram as code" -> Sequence diagram.
-// Code: backend/app/pipeline/extractor.py, extractor/extractor/{serve,pipeline,events,relations,llm}.py
+// Code: backend/app/pipeline/extractor.py, extractor/extractor/{pipeline,events,relations,llm}.py
 
 title LLM call sequence for one chapter
 autoNumber on
 
 Job runner [icon: list, color: purple]
 Extractor client [icon: send, color: blue]
-Serve or CLI [icon: server, color: orange]
+CLI [icon: terminal, color: orange]
 Pipeline [icon: layers, color: orange]
 Encoders [icon: box, color: green]
 llm generate [icon: code, color: orange]
@@ -15,14 +15,8 @@ Ollama [icon: cpu, color: orange]
 Grounding [icon: shield, color: gray]
 
 Job runner > Extractor client: extract_chapter(text + chapter_number)
-alt [label: EXTRACTOR_URL set, color: orange] {
-  Extractor client > Serve or CLI: POST /extract + Bearer token (ngrok to Kaggle GPU)
-  Serve or CLI > Serve or CLI: check token; take the GPU lock
-}
-else [label: local, color: blue] {
-  Extractor client > Serve or CLI: subprocess python -m extractor run IN.txt OUT.json
-}
-Serve or CLI > Pipeline: extract(story_id + text)
+Extractor client > CLI: subprocess python -m extractor run IN.txt OUT.json
+CLI > Pipeline: extract(story_id + text)
 
 // GPU handoff: one 6 GB card holds the encoders or the LLM, never both
 Pipeline > Ollama: release_llm - GET /api/ps
@@ -64,6 +58,6 @@ loop [label: each 2000-char chunk with character or organization mentions, color
 
 Pipeline > Ollama: release_llm - keep_alive 0 (GPU back for the next chapter)
 Pipeline > Pipeline: schema_errors vs orion_gold_v1
-Pipeline > Serve or CLI: gold document (or ValueError)
-Serve or CLI > Extractor client: JSON (HTTP 200 / OUT.json) or error (HTTP 500 / exit code)
+Pipeline > CLI: gold document (or ValueError)
+CLI > Extractor client: OUT.json or error (exit code)
 Extractor client > Job runner: to_legacy dict then integrate in one transaction

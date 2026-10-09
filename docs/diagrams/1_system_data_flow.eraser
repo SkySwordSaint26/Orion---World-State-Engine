@@ -36,14 +36,7 @@ Dispatch [icon: send, color: purple] {
 Chapter run [icon: play, color: purple] {
   Claim run [icon: lock, label: "Claim run atomically: PENDING to PROCESSING"]
   Load text [icon: file-text, label: "Read ChapterVersion content file"]
-  Extractor mode [shape: diamond, label: "EXTRACTOR_URL set?"]
   Local subprocess [icon: terminal, label: "Subprocess: extractor/.venv python -m extractor run IN.txt OUT.json (900 s timeout)"]
-  Remote HTTP [icon: globe, label: "httpx POST EXTRACTOR_URL/extract + Bearer EXTRACTOR_TOKEN"]
-}
-
-Remote GPU Kaggle [icon: cloud, color: orange] {
-  Ngrok tunnel [icon: link, label: "ngrok static domain"]
-  Serve endpoint [icon: server, label: "serve.py: bearer check + one-at-a-time GPU lock"]
 }
 
 Extractor [icon: cpu, color: orange] {
@@ -128,13 +121,8 @@ Job runner > Abort later runs: a chapter failed
 // ---- one chapter
 Claim run > Load text
 File store > Load text
-Load text > Extractor mode
-Extractor mode > Local subprocess: no
-Extractor mode > Remote HTTP: yes
-Remote HTTP > Ngrok tunnel
-Ngrok tunnel > Serve endpoint
-Serve endpoint > Extract stages
-Local subprocess > Extract stages: same process on local GPU
+Load text > Local subprocess
+Local subprocess > Extract stages: local GPU
 Extract stages <> Encoders
 Extract stages <> Ollama: JSON-constrained prompts
 Ollama <> NuExtract: facts + relationships

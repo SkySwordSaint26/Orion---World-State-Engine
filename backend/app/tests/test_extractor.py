@@ -1,6 +1,4 @@
 """The extractor's gold document -> the integration's dict (app/pipeline/extractor.py)."""
-import pytest
-
 from app.pipeline.extractor import to_legacy
 from app.tests.test_phase2_integration import contradictions, integrate, world  # noqa: F401 (fixture)
 
@@ -81,23 +79,3 @@ def test_a_chapter_naming_an_entity_by_its_alias_joins_the_stored_entity(world):
         aliases = sorted(a.alias for a in s.query(EntityAlias).filter_by(entity_id=entity.id))
     assert entity.canonical_name == "Dan" and aliases == ["Daniel", "Daniel Esperanza"]
 
-
-def test_extractor_url_sends_the_chapter_to_the_remote_server(monkeypatch):
-    import httpx
-    from app.pipeline import extractor
-    sent = {}
-
-    def post(url, json, headers, timeout):
-        sent.update(url=url, json=json, auth=headers["Authorization"])
-        return httpx.Response(200, json={"story_id": json["story_id"]})
-
-    monkeypatch.setattr(extractor.settings, "EXTRACTOR_URL", "https://orion.example/")
-    monkeypatch.setattr(extractor.settings, "EXTRACTOR_TOKEN", "secret")
-    monkeypatch.setattr(extractor.httpx, "post", post)
-    assert extractor.run_extractor("Dan waved.", 3) == {"story_id": "chapter_3"}
-    assert sent == {"url": "https://orion.example/extract", "json": {"story_id": "chapter_3", "text": "Dan waved."},
-                    "auth": "Bearer secret"}
-
-    monkeypatch.setattr(extractor.httpx, "post", lambda *a, **k: httpx.Response(500, json={"error": "CUDA OOM"}))
-    with pytest.raises(RuntimeError, match="chapter 3: HTTP 500.*CUDA OOM"):
-        extractor.run_extractor("Dan waved.", 3)
