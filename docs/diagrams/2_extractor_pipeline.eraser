@@ -1,0 +1,161 @@
+// Orion extractor (extractor/extractor/pipeline.py): one chapter's text -> an orion_gold_v1 document.
+// Paste into eraser.io -> "Diagram as code" (Flow chart).
+// Colors: green = encoder model, orange = LLM call, gray = deterministic code, purple = GPU memory handoff.
+
+title Extractor pipeline - stages, models and the gold document they fill
+direction down
+colorMode pastel
+styleMode shadow
+typeface clean
+
+Input [shape: oval, icon: file-text, label: "story_id + chapter text"]
+Doc skeleton [shape: document, label: "doc = schema_version 1.0 + story_id + text + 7 empty lists"]
+
+Stage 0 GPU [icon: refresh-cw, color: purple] {
+  Release LLM start [label: "release_llm: Ollama /api/ps then keep_alive 0 for every loaded model (frees the chat qwen2.5:7b too)"]
+}
+
+Stage 1 Mentions [icon: tag, color: green] {
+  GLiNER mentions [icon: box, label: "GLiNER2 large extract_entities_long; 5 described labels; threshold 0.5"]
+  Best type [label: "best_type: one label per distinct span (most confident)"]
+  Mention kind [label: "spaCy head POS: PROPN = proper / PRON = dropped / else nominal"]
+}
+
+Stage 2 Coreference [icon: link-2, color: green] {
+  BookNLP run [icon: box, label: "BookNLP big: entity + quote + event + coref (output cached for stages 3-4)"]
+  Link clusters [label: "link: align spans to mentions; add pronoun mentions + short proper names"]
+  Naming links [label: "naming_links: my/his name is X; This is X / I am X = narrator"]
+  Merge clusters [label: "merge: union-find on same text+type and naming links"]
+}
+
+Stage 3 Events [icon: activity, color: gray] {
+  Event triggers [label: "BookNLP token is a realis EVENT and a VERB"]
+  Lexicon type [label: "Verb lexicon on lemma; else OTHER; said nothing = OTHER"]
+  Death rule [label: "X was dead (acomp, no negation) = DEATH with X patient"]
+  Participants [label: "Dependency parse: nsubj agent / nsubjpass + dobj patient / dative recipient / place prep location; conjuncts share"]
+}
+
+Stage 4 Temporal [icon: clock, color: gray] {
+  GLiNER temporal [icon: box, color: green, label: "GLiNER2 temporal labels: absolute / relative / duration / sequence_marker"]
+  Clause relations [label: "advcl or pcomp + before/until = BEFORE / after = AFTER / while = DURING"]
+}
+
+Stage 5 GPU [icon: refresh-cw, color: purple] {
+  Release encoders [label: "release_encoders: drop GLiNER2 + BookNLP; torch.cuda.empty_cache (6 GB GPU)"]
+}
+
+Stage 6 Event retyping optional [icon: aperture, color: orange] {
+  Event LLM switch [shape: diamond, label: "ORION_EVENT_LLM set?"]
+  Mark triggers [label: "Per sentence: wrap each trigger as T1 word (mode all or only OTHER)"]
+  Typing call [icon: aperture, label: "LLM call: JSON schema with one EVENT_TYPES enum per trigger; num_predict 512"]
+  Apply types [label: "Replace type when the reply is a valid enum value"]
+}
+
+Stage 7 Relations and facts [icon: share-2, color: orange] {
+  Role pairs [color: gray, label: "role_pairs (spaCy): my boss / Dan's mother / X is her brother; creates missing role mentions + clusters"]
+  Title facts [color: gray, label: "title_facts: Doctor / Captain before a name = occupation or title"]
+  Chunking [label: "chunk_document: 2000-char sentence-aligned chunks; no overlap"]
+  Chunk names [shape: diamond, label: "Chunk has character or organization mentions?"]
+  People call [icon: aperture, label: "NuExtract call A: people template = name + 11 fact properties as verbatim-string"]
+  Ground facts [label: "Name matches a mention (name_key); value occurs in chunk; at most 40 chars; fact_value checks"]
+  Relationships call [icon: aperture, label: "NuExtract call B: subject + relation enum + object + evidence"]
+  Ground relationships [label: "Both names are mentions; predicate valid; stated(): evidence quoted + names both + cue word"]
+  Canonical dedupe [label: "canonical (CHILD_OF flipped; symmetric ordered); no self; dedupe per entity"]
+  Representative [label: "Record a named mention of the entity in that sentence"]
+}
+
+Stage 8 GPU [icon: refresh-cw, color: purple] {
+  Release LLM end [label: "release_llm: hand the GPU back for the next chapter"]
+}
+
+Validate [shape: diamond, icon: check-square, label: "schema_errors vs orion_gold_v1.schema.json"]
+Raise [color: red, icon: x-circle, label: "ValueError: chapter fails"]
+Output [shape: oval, icon: file, label: "orion_gold_v1 document"]
+
+Gold document lists [icon: database, color: blue] {
+  mentions [shape: cylinder, label: "mentions M1..: text / type / kind / offsets"]
+  coreference_clusters [shape: cylinder, label: "coreference_clusters C1..: mention ids"]
+  events [shape: cylinder, label: "events E1..: type / trigger / participants"]
+  temporal_expressions [shape: cylinder, label: "temporal_expressions T1.."]
+  temporal_relations [shape: cylinder, label: "temporal_relations TR1..: BEFORE / AFTER / DURING"]
+  relationships [shape: cylinder, label: "relationships R1..: 12 predicates"]
+  facts [shape: cylinder, label: "facts F1..: property / value"]
+}
+
+Models [icon: cpu, color: gray] {
+  GLiNER2 model [icon: box, color: green, label: "fastino/gliner2-large-v1"]
+  BookNLP model [icon: box, color: green, label: "BookNLP big (fiction-trained)"]
+  spaCy model [icon: box, color: green, label: "spaCy en_core_web_sm (no NER)"]
+  Ollama server [icon: server, color: orange, label: "Ollama localhost:11434 /api/chat; temp 0; num_ctx 4096"]
+  NuExtract model [icon: aperture, color: orange, label: "nuextract2-4b GGUF Q4_K_M (ORION_LLM_MODEL)"]
+}
+
+Truncation [color: red, label: "done_reason = length: RuntimeError (never partial JSON)"]
+
+// ---- stage order (pipeline.STAGES)
+Input > Doc skeleton
+Doc skeleton > Release LLM start
+Release LLM start > GLiNER mentions
+GLiNER mentions > Best type > Mention kind
+Mention kind > mentions
+Mention kind > BookNLP run
+BookNLP run > Link clusters > Naming links > Merge clusters
+Link clusters > mentions: + pronouns / short names
+Merge clusters > coreference_clusters
+Merge clusters > Event triggers
+Event triggers > Lexicon type > Participants
+Event triggers > Death rule
+Death rule > Participants
+Participants > events
+Participants > GLiNER temporal
+GLiNER temporal > temporal_expressions
+GLiNER temporal > Clause relations
+Clause relations > temporal_relations
+Clause relations > Release encoders
+Release encoders > Event LLM switch
+Event LLM switch > Mark triggers: yes
+Mark triggers > Typing call > Apply types
+Apply types > events: retyped
+Event LLM switch > Role pairs: no
+Apply types > Role pairs
+Role pairs > relationships
+Role pairs > mentions: role mentions
+Role pairs > Title facts
+Title facts > facts
+Title facts > Chunking
+Chunking > Chunk names
+Chunk names > People call: yes
+Chunk names > Chunking: no - next chunk
+People call > Ground facts
+Ground facts > Representative
+People call > Relationships call
+Relationships call > Ground relationships
+Ground relationships > Canonical dedupe
+Canonical dedupe > Representative
+Representative > facts
+Representative > relationships
+Representative > Release LLM end: after the last chunk
+Release LLM end > Validate
+Validate > Output: valid
+Validate > Raise: errors
+
+// ---- which stage reads what
+mentions --> Link clusters
+mentions --> Participants
+coreference_clusters --> Role pairs
+coreference_clusters --> Representative
+events --> Clause relations
+events --> Mark triggers
+
+// ---- models used
+GLiNER2 model --> GLiNER mentions
+GLiNER2 model --> GLiNER temporal
+BookNLP model --> BookNLP run
+spaCy model --> Mention kind
+spaCy model --> Role pairs
+spaCy model --> Ground facts
+Ollama server --> Typing call: ORION_EVENT_LLM model
+Ollama server --> People call: format json
+Ollama server --> Relationships call: format json
+NuExtract model --> Ollama server
+Ollama server --> Truncation

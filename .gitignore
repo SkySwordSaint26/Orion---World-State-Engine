@@ -53,3 +53,6 @@ temp/
 
 # graphify knowledge graph (generated: graphify update .)
 graphify-out/
+
+# Kaggle/experiment result bundles
+orion_results.zip
