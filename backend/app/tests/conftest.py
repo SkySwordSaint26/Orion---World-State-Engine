@@ -28,7 +28,6 @@ from app.models.world import World
 from app.pipeline import extractor
 from app.services.manuscript_service import ManuscriptService
 from app.services.world_state_service import WorldStateService
-
 from app.workers.tasks import extraction_task, job_update_task
 
 

@@ -78,4 +78,3 @@ def test_a_chapter_naming_an_entity_by_its_alias_joins_the_stored_entity(world):
         [entity] = s.query(Entity).filter_by(world_id=w["world_id"]).all()
         aliases = sorted(a.alias for a in s.query(EntityAlias).filter_by(entity_id=entity.id))
     assert entity.canonical_name == "Dan" and aliases == ["Daniel", "Daniel Esperanza"]
-
