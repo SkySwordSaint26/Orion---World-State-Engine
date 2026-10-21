@@ -11,6 +11,7 @@ from app.models.processing_job import ProcessingJob
 from app.models.world import World
 from app.core.constants import JobStatus, JobType, ExtractionRunStatus
 from app.pipeline import extractor
+from app.pipeline.cancellation import cancel_requested, check_cancelled, ExtractionCancelled
 from app.services.proposal_service import ProposalService
 from app.services.world_state_service import WorldStateService
 from app.utils.file_handler import read_file_text
@@ -77,6 +78,11 @@ def _record_failure(db: Session, extraction_run_id: str, job_id: str, message: s
     failed attempt left pending first. Never overwrites a run that already committed as DONE.
     """
     db.rollback()
+    job = db.get(ProcessingJob, job_id) if job_id else None
+    if job is not None:
+        db.refresh(job, with_for_update=True)
+        if job.status == JobStatus.CANCELLED.value:
+            return
     run = db.get(ExtractionRun, extraction_run_id) if extraction_run_id else None
     if run is not None and run.status != ExtractionRunStatus.DONE.value:
         run.status = ExtractionRunStatus.FAILED.value
@@ -87,10 +93,13 @@ def _record_failure(db: Session, extraction_run_id: str, job_id: str, message: s
     job = db.get(ProcessingJob, job_id) if job_id else None
     if job is None:
         return
+    db.refresh(job)
+    if job.status == JobStatus.CANCELLED.value:
+        return
     update_job_progress(job_id, db)
     # No run row to roll up (failure before/without an ExtractionRun): fail the job directly.
     db.refresh(job)
-    if run is None and job.status != JobStatus.FAILED.value:
+    if run is None and job.status not in (JobStatus.FAILED.value, JobStatus.CANCELLED.value):
         job.status = JobStatus.FAILED.value
         job.error_message = message
         job.completed_at = _now()
@@ -107,6 +116,7 @@ def _execute(
     chapter_text: Optional[str],
     chapter_number: Optional[int],
 ) -> Dict[str, Any]:
+    check_cancelled()
     run = db.get(ExtractionRun, extraction_run_id)
     if run is None:
         raise LookupError(f"ExtractionRun {extraction_run_id} not found")
@@ -147,14 +157,18 @@ def _execute(
         f"chapter_id={chapter_id} chapter={chapter_number}"
     )
     extracted_data = extractor.extract_chapter(chapter_text, chapter_number)
-
+    check_cancelled()
+    _lock_world(db, world_id)
     job = db.get(ProcessingJob, job_id)
+    if job is not None:
+        db.refresh(job, with_for_update=True)
+        if job.status == JobStatus.CANCELLED.value:
+            raise ExtractionCancelled("Extraction cancelled by the author.")
     if job is not None and job.job_type == JobType.RE_EXTRACTION.value:
         # Propose, don't write (docs/api.md §17): the world the author has accepted stays as it is until they apply
         # what they choose through the manual endpoints.
         result = ProposalService(db).build(world_id, job_id, chapter_id, chapter_number, extracted_data)
         ProposalService(db).save(result)
-        db.rollback()                                   # the comparison only read
         run = db.get(ExtractionRun, extraction_run_id)
         run.status = ExtractionRunStatus.DONE.value
         run.completed_at = _now()
@@ -163,7 +177,6 @@ def _execute(
         return {"status": "success", "counts": {"proposals": len(result["proposals"])}}
 
     # ---- single integration transaction: lock -> ordering gate -> integrate -> DONE -> commit ----
-    _lock_world(db, world_id)
     blockers = find_blocking_predecessors(db, chapter_id)
     if blockers:
         raise ChapterOrderError(
@@ -215,12 +228,21 @@ def execute_chapter_extraction(
         logger.error(f"Could not open database session for extraction ({ids}): {e}", exc_info=True)
         return {"status": "failed", "error": f"database unavailable: {e}"}
 
+    def is_cancelled():
+        with SessionLocal() as check_db:
+            job = check_db.get(ProcessingJob, job_id)
+            return job is not None and job.status == JobStatus.CANCELLED.value
+
+    cancellation_token = cancel_requested.set(is_cancelled)
     try:
         try:
             outcome = _execute(
                 db, world_id, job_id, extraction_run_id, chapter_id, chapter_version_id,
                 chapter_text, chapter_number
             )
+        except ExtractionCancelled:
+            db.rollback()
+            return {"status": "cancelled"}
         except Exception as e:
             logger.error(f"Extraction failed ({ids}): {e}", exc_info=True)
             try:
@@ -238,6 +260,7 @@ def execute_chapter_extraction(
             logger.info(f"Extraction completed ({ids}) counts={outcome['counts']}")
         return outcome
     finally:
+        cancel_requested.reset(cancellation_token)
         db.close()
 
 
@@ -245,6 +268,11 @@ def abort_pending_runs(job_id: str, message: str) -> int:
     """Marks every still-PENDING run of a job FAILED (valid terminal state) and rolls the job up."""
     db = SessionLocal()
     try:
+        job = db.get(ProcessingJob, job_id)
+        if job is not None:
+            db.refresh(job, with_for_update=True)
+            if job.status == JobStatus.CANCELLED.value:
+                return 0
         runs = db.query(ExtractionRun).filter(
             ExtractionRun.processing_job_id == job_id,
             ExtractionRun.status == ExtractionRunStatus.PENDING.value
@@ -274,6 +302,8 @@ def run_extraction_job(job_id: str) -> Dict[str, Any]:
         if job is None:
             logger.error(f"run_extraction_job: job {job_id} not found")
             return {"status": "failed", "error": f"job {job_id} not found"}
+        if job.status == JobStatus.CANCELLED.value:
+            return {"status": "cancelled"}
         world_id = job.world_id
         rows = db.query(ExtractionRun, Chapter).join(
             ChapterVersion, ExtractionRun.chapter_version_id == ChapterVersion.id
@@ -314,6 +344,8 @@ def run_extraction_job(job_id: str) -> Dict[str, Any]:
             chapter_version_id=item["chapter_version_id"],
             chapter_number=item["chapter_number"],
         )
+        if result["status"] == "cancelled":
+            return result
         if result["status"] != "success":
             failed_chapter = item["chapter_number"]
             break

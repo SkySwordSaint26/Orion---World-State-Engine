@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { getProfile } from '../api/account';
 import { applyProposals, PROPOSAL_APPLY_ORDER } from '../api/proposals';
 import type { ApplyResult, EntityRef, Proposal } from '../api/proposals';
+import { Dialog } from './Dialog';
 
 interface Props {
   worldId: string;
@@ -29,12 +30,17 @@ const refsOf = (p: Proposal): string[] => {
  */
 export const ProposalReviewModal: React.FC<Props> = ({ worldId, chapterNumber, proposals, onClose }) => {
   const shown = useMemo(() => proposals.filter((p) => p.change !== 'known'), [proposals]);
-  const [accepted, setAccepted] = useState<Set<string>>(
-    () => new Set(shown.filter((p) => p.change === 'new').map((p) => p.id)));
-  // Settings → "Tick new items in the re-extraction review" off: the author ticks each one
+  const [accepted, setAccepted] = useState<Set<string>>(new Set());
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const [preferenceError, setPreferenceError] = useState<string | null>(null);
   useEffect(() => {
-    getProfile().then((p) => { if (!p.preferences.review_preselect_new) setAccepted(new Set()); }).catch(() => {});
-  }, []);
+    let closed = false;
+    getProfile().then(profile => {
+      if (!closed && profile.preferences.review_preselect_new) setAccepted(new Set(shown.filter(item => item.change === 'new').map(item => item.id)));
+    }).catch(() => { if (!closed) setPreferenceError('Could not load review preferences. Select the changes you want to apply.'); })
+      .finally(() => { if (!closed) setPreferencesReady(true); });
+    return () => { closed = true; };
+  }, [shown]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ApplyResult | null>(null);
 
@@ -60,24 +66,10 @@ export const ProposalReviewModal: React.FC<Props> = ({ worldId, chapterNumber, p
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void-black/80 backdrop-blur-sm">
-      <div className="bg-surface-container-high border border-primary/30 rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col">
-        <div className="p-6 border-b border-starlight-white/5 flex justify-between items-start gap-4">
-          <div>
-            <h2 className="font-headline-md text-starlight-white">
-              Review changes{chapterNumber ? ` from chapter ${chapterNumber}` : ''}
-            </h2>
-            <p className="text-on-surface-variant/70 text-sm mt-1">
-              Your world stays as it is until you apply. {shown.length} proposed change{shown.length === 1 ? '' : 's'}
-              {knownCount > 0 ? `, ${knownCount} already in your world` : ''}.
-            </p>
-          </div>
-          <button onClick={() => onClose(false)} className="text-on-surface-variant/60 hover:text-primary" disabled={busy}>
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+    <Dialog title={`Review changes${chapterNumber ? ` from chapter ${chapterNumber}` : ''}`} onClose={() => { if (!busy) onClose((result?.applied || 0) > 0); }}>
+      <p className="mb-5 text-sm leading-relaxed text-on-surface-variant/70">Your world stays as it is until you apply. {shown.length} proposed changes{knownCount > 0 ? `, ${knownCount} already in your world` : ''}.</p>
+      {preferenceError && <p role="alert" className="mb-4 text-sm text-error">{preferenceError}</p>}
+        <div className="space-y-6">
           {result ? (
             <div className="space-y-3 text-sm">
               <p className="text-starlight-white">
@@ -110,7 +102,7 @@ export const ProposalReviewModal: React.FC<Props> = ({ worldId, chapterNumber, p
                               type="checkbox"
                               className="mt-1 accent-[#eba686]"
                               checked={accepted.has(p.id) && !off}
-                              disabled={off || busy}
+                              disabled={off || busy || !preferencesReady}
                               onChange={() => toggle(p.id)}
                             />
                             <span className="flex-1 text-sm text-starlight-white/90">
@@ -132,7 +124,7 @@ export const ProposalReviewModal: React.FC<Props> = ({ worldId, chapterNumber, p
           )}
         </div>
 
-        <div className="p-4 border-t border-starlight-white/5 flex justify-end gap-3">
+        <div className="mt-6 border-t border-white/5 pt-5 flex justify-end gap-3">
           {result ? (
             <button onClick={() => onClose(result.applied > 0)}
               className="px-4 py-2 rounded-lg font-label-sm text-sm bg-primary/20 text-primary border border-primary/50 hover:bg-primary hover:text-void-black transition-colors">
@@ -144,14 +136,13 @@ export const ProposalReviewModal: React.FC<Props> = ({ worldId, chapterNumber, p
                 className="px-4 py-2 rounded-lg font-label-sm text-sm text-starlight-white/70 hover:text-starlight-white hover:bg-surface-container-highest transition-colors">
                 Discard all
               </button>
-              <button onClick={apply} disabled={busy || shown.length === 0}
+              <button onClick={apply} disabled={busy || !preferencesReady || shown.length === 0}
                 className="px-4 py-2 rounded-lg font-label-sm text-sm bg-primary/20 text-primary border border-primary/50 hover:bg-primary hover:text-void-black transition-colors disabled:opacity-50">
                 {busy ? 'Applying…' : `Apply ${[...accepted].filter((id) => { const p = shown.find((x) => x.id === id); return p && !blocked(p); }).length} selected`}
               </button>
             </>
           )}
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 };

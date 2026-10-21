@@ -1,153 +1,67 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { apiFetch } from '../api/client';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { AppShell } from '../components/AppShell';
+import { cancelJob, getJobStatus, type JobStatus } from '../api/jobs';
 import { useWorldStore } from '../store/useWorldStore';
 
-export const ProcessingWorld: React.FC = () => {
-  const navigate = useNavigate();
-  const { worldId } = useParams<{ worldId: string }>();
+export const ProcessingWorld = () => {
+  const { worldId } = useParams();
   const location = useLocation();
-  const [progress, setProgress] = useState(0);
-  const [statusText, setStatusText] = useState('Initializing extraction pipeline...');
+  const navigate = useNavigate();
+  const jobId = new URLSearchParams(location.search).get('jobId');
+  const [job, setJob] = useState<JobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const jobId = params.get('jobId');
-
-    if (!jobId) {
-      setError('No extraction job was created for this import.');
-      return;
-    }
-
-    // Poll the backend job status endpoint
-    const pollInterval = setInterval(async () => {
-      try {
-        const data = await apiFetch<any>(`/jobs/${jobId}/status`);
-        if (data.progress_total > 0) {
-          const currentProgress = Math.min(100, Math.floor((data.progress_current / data.progress_total) * 100));
-          setProgress(currentProgress);
-        }
-        
-        if (data.status === 'processing') {
-          setStatusText(`Extracting entities & lore (${data.progress_current} / ${data.progress_total})...`);
-        } else if (data.status === 'done') {
-          setProgress(100);
-          setStatusText('Extraction complete! Finalizing world ledger...');
-          clearInterval(pollInterval);
-        } else if (data.status === 'failed') {
-          clearInterval(pollInterval);
-          setError(data.error_message || 'Extraction failed.');
-          setStatusText(`Extraction failed: ${data.error_message || 'Unknown error'}`);
-        }
-      } catch (e: any) {
-        clearInterval(pollInterval);
-        setError(e.message || 'Could not read extraction status.');
-      }
-    }, 1500);
-
-    return () => clearInterval(pollInterval);
-  }, [location.search]);
-
+  const [cancelling, setCancelling] = useState(false);
+  const [retry, setRetry] = useState(0);
   const { fetchManuscriptsForWorld, fetchEntitiesForWorld } = useWorldStore();
+  const terminal = job && ['done', 'failed', 'cancelled'].includes(job.status);
+  const progress = job?.status === 'done' ? 100 : job?.progress_total ? Math.min(99, Math.floor(100 * job.progress_current / job.progress_total)) : 0;
 
   useEffect(() => {
-    if (progress === 100) {
-      if (worldId) {
-        fetchManuscriptsForWorld(worldId);
-        fetchEntitiesForWorld(worldId);
+    if (!jobId) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const status = await getJobStatus(jobId, controller.signal);
+        if (controller.signal.aborted) return;
+        setJob(current => current?.status === 'cancelled' ? current : status);
+        setError(null);
+        if (!['done', 'failed', 'cancelled'].includes(status.status)) timer = setTimeout(poll, 1500);
+      } catch (failure) {
+        if (!controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'Could not read extraction status.');
       }
-      const timeout = setTimeout(() => {
-        navigate(`/worlds/${worldId || ''}`);
-      }, 1200);
-      return () => clearTimeout(timeout);
-    }
-  }, [progress, navigate, worldId, fetchManuscriptsForWorld, fetchEntitiesForWorld]);
+    };
+    poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [jobId, retry]);
 
-  return (
-    <div className="bg-void-black text-on-surface h-screen w-screen overflow-hidden flex flex-col items-center justify-center relative selection:bg-primary/30 selection:text-primary-fixed select-none">
-      
-      {/* Ambient background glow */}
-      <div className="absolute inset-0 ambient-glow animate-pulse-slow pointer-events-none z-0"></div>
+  useEffect(() => {
+    if (job?.status !== 'done' || !worldId) return;
+    fetchManuscriptsForWorld(worldId);
+    fetchEntitiesForWorld(worldId);
+    const timer = setTimeout(() => navigate(`/worlds/${worldId}`), 1200);
+    return () => clearTimeout(timer);
+  }, [job?.status, worldId, navigate, fetchManuscriptsForWorld, fetchEntitiesForWorld]);
 
-      {/* Cancel button in top right */}
-      <div className="absolute top-0 right-0 p-gutter z-50">
-        <button 
-          onClick={() => navigate('/worlds')}
-          className="flex items-center gap-2 px-4 py-2 rounded-full border border-outline-variant text-on-surface-variant font-label-sm text-xs hover:text-primary hover:border-primary transition-all duration-300 backdrop-blur-md bg-surface-dim/50"
-        >
-          <span className="material-symbols-outlined text-[16px] font-light">close</span>
-          Cancel Import
-        </button>
-      </div>
-
-      {/* Content canvas */}
-      <main className="relative z-10 w-full max-w-2xl px-gutter flex flex-col items-center mx-auto">
-        
-        {/* Left column: progress */}
-        <section className="flex flex-col gap-6 w-full animate-fade-in-up">
-          {error && <p className="text-center text-error text-sm">{error}</p>}
-          <div className="flex flex-col gap-2 text-center">
-            <h1 className="font-display-lg text-display-lg text-on-surface tracking-tight leading-tight">
-              Building a first draft of your world.
-            </h1>
-            <p className="font-body-lg text-body-lg text-on-surface-variant/80 mt-2 leading-relaxed">
-              Analyzing manuscript syntax and mapping entity relationships. You remain the final authority on all lore.
-            </p>
-          </div>
-
-          {/* Progress indicators */}
-          <div className="flex flex-col gap-stack-md mt-6">
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between items-end">
-                <span className="font-label-sm text-label-sm text-primary uppercase tracking-widest text-[10px]">
-                  {statusText}
-                </span>
-                <span className="font-label-sm text-label-sm text-copper-glow font-semibold">{progress}%</span>
-              </div>
-              <div className="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden relative">
-                <div 
-                  className="absolute inset-y-0 left-0 bg-copper-glow shadow-[0_0_12px_rgba(230,162,126,0.6)] transition-all duration-300 ease-out"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Sub-tasks lists */}
-            <div className="flex flex-col gap-3 mt-4 text-sm">
-              <div className="flex items-center gap-3 text-on-surface-variant">
-                <span className="material-symbols-outlined text-primary text-[20px] fill font-light">check_circle</span>
-                <span className="font-body-md text-on-surface-variant/80">Structural analysis complete</span>
-              </div>
-              
-              <div className="flex items-center gap-3 text-primary">
-                {progress < 85 ? (
-                  <span className="material-symbols-outlined animate-spin text-[20px] font-light">sync</span>
-                ) : (
-                  <span className="material-symbols-outlined text-primary text-[20px] fill font-light">check_circle</span>
-                )}
-                <span className={`font-body-md ${progress < 85 ? 'text-copper-glow' : 'text-on-surface-variant/80'}`}>
-                  {progress < 85 ? 'Detecting characters and locations...' : 'Character and location extraction complete'}
-                </span>
-              </div>
-              
-              <div className={`flex items-center gap-3 ${progress < 85 ? 'text-on-surface-variant/40' : 'text-primary'}`}>
-                {progress < 85 ? (
-                  <span className="material-symbols-outlined text-[20px] font-light">hourglass_empty</span>
-                ) : progress < 100 ? (
-                  <span className="material-symbols-outlined animate-spin text-[20px] font-light">sync</span>
-                ) : (
-                  <span className="material-symbols-outlined text-primary text-[20px] fill font-light">check_circle</span>
-                )}
-                <span className="font-body-md">
-                  {progress < 85 ? 'Generating timeline anchors' : progress < 100 ? 'Generating timeline anchors...' : 'Timeline anchors generated'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-    </div>
-  );
+  const cancel = async () => {
+    if (!jobId || cancelling) return;
+    setCancelling(true);
+    try { setJob(await cancelJob(jobId)); setError(null); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : 'Cancellation was not confirmed.'); }
+    finally { setCancelling(false); }
+  };
+  return <AppShell><main className="studio-page"><div className="mx-auto flex max-w-2xl flex-col items-center py-10 text-center md:py-16">
+    <span className="studio-eyebrow">Sanctuary ingestion · Your manuscript</span><h1 className="studio-title">Reading the world<br /><em>between your lines.</em></h1>
+    <p className="studio-intro">Characters, places, and the threads that bind them. You remain the final authority on the lore.</p>
+    <div className="studio-orbit my-16"><span className={`material-symbols-outlined text-5xl text-primary ${terminal ? '' : 'animate-pulse'}`}>{job?.status === 'cancelled' ? 'pause' : job?.status === 'done' ? 'check' : 'auto_awesome'}</span></div>
+    <section className="studio-card w-full p-7 text-left" aria-label="Extraction progress">
+      <div className="mb-5 flex items-center justify-between gap-3"><span className="studio-eyebrow mb-0">Manuscript inscription</span><span className="text-xs text-primary">{progress}%</span></div>
+      <progress max={100} value={progress} className="h-1 w-full accent-primary-container" aria-label="Completed chapters" />
+      <h2 role="status" className="mt-6 font-headline-md text-2xl">{!jobId ? 'No extraction job was supplied.' : job?.status === 'cancelled' ? 'Import cancelled' : job?.status === 'failed' ? 'The reading was interrupted' : job?.status === 'done' ? 'Your world is ready' : job?.status === 'processing' ? 'Tracing characters and their connections…' : 'Waiting to begin…'}</h2>
+      <p className="mt-3 text-sm leading-relaxed text-on-surface-variant/70">{job?.progress_current || 0} of {job?.progress_total || 0} chapters completed.{job?.status === 'cancelled' ? ' Completed chapters have been kept. Remaining extraction has been cancelled.' : job?.status === 'failed' ? ` ${job.error_message || 'Extraction failed.'}` : ''}</p>
+      {error && <div role="alert" className="mt-4 text-sm text-error">{error}<button className="ml-3 underline" onClick={() => setRetry(value => value + 1)}>Retry status</button></div>}
+    </section>
+    <div className="mt-7 flex flex-wrap justify-center gap-4">{jobId && !terminal && <button className="studio-secondary" disabled={cancelling} onClick={cancel}>{cancelling ? 'Cancelling…' : 'Cancel Import'}</button>}<Link className="studio-secondary" to={`/worlds/${worldId || ''}`}>{terminal ? 'Return to world' : 'Leave reading in background'}</Link></div>
+  </div></main></AppShell>;
 };

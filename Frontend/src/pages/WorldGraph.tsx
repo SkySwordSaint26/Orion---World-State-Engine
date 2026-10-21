@@ -65,6 +65,8 @@ export const WorldGraph: React.FC = () => {
   } = useWorldStore();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [controlsOpen, setControlsOpen] = useState(() => window.innerWidth >= 768);
+  const [graphError, setGraphError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     character: true,
     location: true,
@@ -166,6 +168,7 @@ export const WorldGraph: React.FC = () => {
     if (!worldId) return;
     const requestId = ++graphRequestRef.current;
     setLoading(true);
+    setGraphError(null);
     try {
       const query = asOfChapter !== null ? `?as_of_chapter=${asOfChapter}` : '';
       const data = await apiFetch<any>(`/worlds/${worldId}/graph${query}`);
@@ -228,7 +231,7 @@ export const WorldGraph: React.FC = () => {
         setEdges(fetchedEdges);
       }
     } catch (err) {
-      console.error('Failed to fetch graph data:', err);
+      if (requestId === graphRequestRef.current) setGraphError(err instanceof Error ? err.message : 'Could not load graph.');
     } finally {
       if (requestId === graphRequestRef.current) setLoading(false);
     }
@@ -522,7 +525,7 @@ export const WorldGraph: React.FC = () => {
 
   // Filter nodes & edges
   const visibleNodes = nodes.filter((n) => {
-    const matchesFilter = filters[n.type];
+    const matchesFilter = filters[n.type] ?? true;
     const matchesSearch =
       n.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       n.subtype.toLowerCase().includes(searchQuery.toLowerCase());
@@ -571,14 +574,14 @@ export const WorldGraph: React.FC = () => {
         <div className="flex items-center gap-4">
           <span className="font-headline-md text-headline-md text-primary">World Graph</span>
           <span className="text-on-surface-variant/50">/</span>
-          <span className="font-label-sm uppercase tracking-widest text-on-surface-variant/70">Network relationships</span>
+          <span className="font-label-sm uppercase tracking-widest text-on-surface-variant/70">Filament cartography</span>
         </div>
-        <span className="font-label-sm uppercase tracking-widest text-on-surface-variant/60">{visibleNodes.length} entities</span>
+        <div className="pointer-events-auto flex items-center gap-4"><span className="hidden text-xs text-on-surface-variant/60 sm:inline">{visibleNodes.length} entities</span><button className="studio-secondary" aria-expanded={controlsOpen} onClick={() => setControlsOpen(value => !value)}>Graph controls</button></div>
       </header>
 
       <main className="flex-1 w-full h-full pt-14 flex relative select-none overflow-hidden">
         {/* Left Control Sidebar */}
-        <aside className="w-72 bg-surface-container-low/70 backdrop-blur-md border-r border-starlight-white/10 h-full flex flex-col z-10 shrink-0 select-none">
+        {controlsOpen && <aside aria-label="Graph controls" className="graph-sidebar flex h-full flex-col !p-0">
           <div className="p-gutter flex flex-col gap-5 h-full overflow-y-auto pt-6">
             {/* Search */}
             <div className="relative group">
@@ -793,7 +796,7 @@ export const WorldGraph: React.FC = () => {
               </div>
             </details>
           </div>
-        </aside>
+        </aside>}
 
         {/* Network Canvas */}
         <div
@@ -802,10 +805,11 @@ export const WorldGraph: React.FC = () => {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          className={`flex-1 relative bg-grid overflow-hidden h-full ${
+          className={`min-w-0 flex-1 relative bg-grid overflow-hidden h-full ${
             isPanning ? 'cursor-grabbing' : 'cursor-grab'
           }`}
         >
+          {graphError && <div role="alert" className="absolute inset-x-5 top-20 z-40 rounded border border-error/30 bg-surface-container p-4 text-sm text-error">{graphError}<button className="ml-4 underline" onClick={fetchGraph}>Retry</button></div>}
           {/* Top Right Floating bar */}
           <div className="absolute top-gutter right-gutter z-30 flex items-center gap-3.5 bg-surface-dim/80 backdrop-blur-md border border-starlight-white/10 rounded-full px-4 py-2 shadow-lg text-xs pointer-events-auto">
             <span className="text-on-surface-variant/80 font-label-sm uppercase tracking-wider">
@@ -1095,7 +1099,7 @@ export const WorldGraph: React.FC = () => {
 
         {/* Right-Side Relationship Details & Version History Drawer */}
         {selectedEdgeId && (
-          <aside className="w-side-panel-width max-w-[min(360px,42vw)] bg-surface-container-low/95 border-l border-starlight-white/10 h-full flex flex-col z-20 shrink-0 select-none overflow-y-auto">
+          <aside className="graph-relationship flex h-full shrink-0 flex-col overflow-y-auto border-l border-white/5 bg-surface-container-low">
             {/* Header */}
             <div className="p-5 border-b border-starlight-white/10 flex items-center justify-between bg-surface-container-high/40">
               <div>

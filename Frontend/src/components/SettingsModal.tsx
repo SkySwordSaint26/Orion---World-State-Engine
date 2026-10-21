@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Dialog } from './Dialog';
 import { useNavigate } from 'react-router-dom';
 import { deleteWorld, getProfile, getWorld, updateProfile, updateWorld } from '../api/account';
 import type { Preferences } from '../api/account';
@@ -20,10 +21,10 @@ export const SettingsModal: React.FC<{ worldId: string | null; onClose: () => vo
   const [originalName, setOriginalName] = useState('');
 
   useEffect(() => {
-    getProfile().then((p) => setPrefs(p.preferences)).catch(() => {});
+    getProfile().then((p) => setPrefs(p.preferences)).catch(error => setMessage({ ok: false, text: error.message }));
     if (realWorld) {
       getWorld(realWorld).then((w) => { setName(w.name); setOriginalName(w.name); setDescription(w.description || ''); })
-        .catch(() => {});
+        .catch(error => setMessage({ ok: false, text: error.message }));
     }
   }, [realWorld]);
 
@@ -37,6 +38,9 @@ export const SettingsModal: React.FC<{ worldId: string | null; onClose: () => vo
     try {
       const w = await updateWorld(realWorld, { name, description });
       setOriginalName(w.name);
+      setName(w.name);
+      setDescription(w.description);
+      useWorldStore.setState(state => ({ worlds: state.worlds.map(world => world.id === realWorld ? { ...world, name: w.name, description: w.description } : world) }));
       flash(true, 'World saved.');
     } catch (e: any) {
       flash(false, e.message);
@@ -65,18 +69,8 @@ export const SettingsModal: React.FC<{ worldId: string | null; onClose: () => vo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void-black/80 backdrop-blur-sm select-text" onClick={onClose}>
-      <div className="bg-surface-container-high border border-primary/30 rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="p-6 border-b border-starlight-white/5 flex justify-between items-center">
-          <h2 className="font-headline-md text-starlight-white flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">settings</span> Archive Settings
-          </h2>
-          <button onClick={onClose} className="text-on-surface-variant/60 hover:text-primary">
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-
-        <div className="p-6 space-y-8">
+    <Dialog title="Archive Settings" onClose={onClose}>
+        <div className="space-y-8">
           {message && <p className={`text-sm ${message.ok ? 'text-emerald-400' : 'text-red-300'}`}>{message.text}</p>}
 
           {realWorld && (
@@ -84,11 +78,11 @@ export const SettingsModal: React.FC<{ worldId: string | null; onClose: () => vo
               <h3 className="text-sm text-starlight-white font-semibold">This world</h3>
               <div>
                 <span className={label}>Name</span>
-                <input className={field} value={name} onChange={(e) => setName(e.target.value)} />
+                <input aria-label="World name" className={field} value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div>
                 <span className={label}>Description</span>
-                <textarea className={`${field} h-20 resize-none`} value={description} onChange={(e) => setDescription(e.target.value)} />
+                <textarea aria-label="World description" className={`${field} h-20 resize-none`} value={description} onChange={(e) => setDescription(e.target.value)} />
               </div>
               <div className="flex justify-end">
                 <button onClick={saveWorld} disabled={!name.trim()} className="px-4 py-1.5 rounded-lg text-sm bg-primary/20 text-primary border border-primary/50 hover:bg-primary hover:text-void-black transition-colors disabled:opacity-40">
@@ -134,7 +128,7 @@ export const SettingsModal: React.FC<{ worldId: string | null; onClose: () => vo
                 Type <span className="text-starlight-white font-semibold">{originalName}</span> to confirm.
               </p>
               <div className="flex gap-2">
-                <input className={field} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder={originalName} />
+                <input aria-label="Confirm world deletion" className={field} value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder={originalName} />
                 <button onClick={removeWorld} disabled={confirm !== originalName}
                   className="px-4 rounded-lg text-sm bg-red-500/10 text-red-300 border border-red-400/40 hover:bg-red-500/30 transition-colors disabled:opacity-40">
                   Delete
@@ -150,7 +144,6 @@ export const SettingsModal: React.FC<{ worldId: string | null; onClose: () => vo
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 };

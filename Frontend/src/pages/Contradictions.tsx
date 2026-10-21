@@ -21,6 +21,7 @@ export const Contradictions: React.FC = () => {
   // Track which contradiction is actively resolving (to show resolution choices)
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [resolutionChoice, setResolutionChoice] = useState<string | null>(null);
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('open');
@@ -35,6 +36,9 @@ export const Contradictions: React.FC = () => {
     if (!activeWorldId) return;
     try {
       await setContradictionStatus(activeWorldId, id, next);
+      setResolutionError(null);
+    } catch (error) {
+      setResolutionError(error instanceof Error ? error.message : 'The decision could not be saved.');
     } finally {
       fetchContradictionsForWorld(activeWorldId);
     }
@@ -51,28 +55,22 @@ export const Contradictions: React.FC = () => {
     setResolutionChoice(null);
   };
 
-  const handleExecuteResolve = (
+  const handleExecuteResolve = async (
     id: string,
     correctText: string,
     preferredFactVersionId?: string | null,
     preferredRelationshipVersionId?: string | null
   ) => {
+    if (!activeWorldId || resolutionChoice) return;
     setResolutionChoice(correctText);
-    
-    // Briefly show selection, then animate out
-    setTimeout(async () => {
-      if (activeWorldId) {
-        await resolveContradictionInBackend(
-          activeWorldId,
-          id,
-          preferredFactVersionId,
-          preferredRelationshipVersionId
-        );
-        fetchContradictionsForWorld(activeWorldId);
-      }
+    setResolutionError(null);
+    try {
+      await resolveContradictionInBackend(activeWorldId, id, preferredFactVersionId, preferredRelationshipVersionId);
+      await fetchContradictionsForWorld(activeWorldId);
       setResolvingId(null);
-      setResolutionChoice(null);
-    }, 800);
+    } catch (error) {
+      setResolutionError(error instanceof Error ? error.message : 'The decision could not be saved.');
+    } finally { setResolutionChoice(null); }
   };
 
   // Helper to render choice selectors based on contradiction data
@@ -164,8 +162,8 @@ export const Contradictions: React.FC = () => {
       {/* Background gradients */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(230,162,126,0.025),transparent_40%)] -z-10 pointer-events-none"></div>
 
-      <main className="flex-1 min-h-screen overflow-y-auto px-8 md:px-12 py-10">
-        <div className="max-w-7xl mx-auto flex flex-col gap-8 animate-fade-in-up">
+      <main className="studio-page">
+        <div className="studio-page-inner flex flex-col gap-8 animate-fade-in-up">
           
           {/* Header */}
           <header className="mb-6 max-w-3xl border-b border-starlight-white/5 pb-6">
@@ -174,7 +172,7 @@ export const Contradictions: React.FC = () => {
               <h1 className="font-display-lg text-display-lg text-starlight-white">Contradictions</h1>
             </div>
             <p className="font-body-lg text-body-lg text-on-surface-variant/80 max-w-2xl leading-relaxed">
-              The Engine has detected potential inconsistencies within the active world state. Resolve conflicts to update manuscripts and sync ledger facts.
+              The Engine has detected potential inconsistencies within the active world state. Inspect the evidence and decide which facts or relationships are canon. Your source text stays under your control.
             </p>
           </header>
 
@@ -206,6 +204,7 @@ export const Contradictions: React.FC = () => {
             ))}
           </div>
 
+          {resolutionError && <p role="alert" className="rounded border border-error/30 bg-error/5 p-4 text-sm text-error">{resolutionError}</p>}
           {shown.length === 0 && (
             <p className="text-on-surface-variant/60 text-sm">
               {tab === 'open' ? 'No open contradictions.' : tab === 'resolved' ? 'Nothing resolved yet.' : 'You have not rejected any contradiction.'}

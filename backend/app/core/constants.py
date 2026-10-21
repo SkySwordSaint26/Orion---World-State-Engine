@@ -5,6 +5,7 @@ class JobStatus(str, Enum):
     PROCESSING = "processing"
     DONE = "done"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 class JobType(str, Enum):
     INITIAL_EXTRACTION = "INITIAL_EXTRACTION"
@@ -45,3 +46,4 @@ class ExtractionRunStatus(str, Enum):
     PROCESSING = "processing"
     DONE = "done"
     FAILED = "failed"
+    CANCELLED = "cancelled"

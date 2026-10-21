@@ -10,12 +10,14 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.config.logging import get_logger
 from app.preprocessing import preprocess_chapter
+from app.pipeline.cancellation import check_cancelled
 
 logger = get_logger(__name__)
 
@@ -33,12 +35,31 @@ def run_extractor(text: str, chapter_number: int) -> Dict[str, Any]:
     with tempfile.TemporaryDirectory() as tmp:
         src, out = Path(tmp) / "chapter.txt", Path(tmp) / "chapter.json"
         src.write_text(text, encoding="utf-8")
-        done = subprocess.run([str(EXTRACTOR_PYTHON), "-m", "extractor", "run", str(src), str(out),
+        check_cancelled()
+        with subprocess.Popen([str(EXTRACTOR_PYTHON), "-m", "extractor", "run", str(src), str(out),
                                "--story-id", f"chapter_{chapter_number}"],
-                              cwd=EXTRACTOR_DIR, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              env={**os.environ, "PYTHONUTF8": "1"}, timeout=TIMEOUT_S)  # cp1252 on Windows otherwise
-        if done.returncode != 0:
-            raise RuntimeError(f"Extraction failed on chapter {chapter_number}: {done.stderr.strip()[-2000:]}")
+                              cwd=EXTRACTOR_DIR, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              text=True, encoding="utf-8", errors="replace",
+                              env={**os.environ, "PYTHONUTF8": "1"}) as process:
+            deadline = time.monotonic() + TIMEOUT_S
+            try:
+                while True:
+                    check_cancelled()
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise subprocess.TimeoutExpired(process.args, TIMEOUT_S)
+                    try:
+                        _, stderr = process.communicate(timeout=min(1, remaining))
+                        break
+                    except subprocess.TimeoutExpired:
+                        continue
+            except BaseException:
+                process.kill()
+                process.communicate()
+                raise
+            if process.returncode != 0:
+                raise RuntimeError(f"Extraction failed on chapter {chapter_number}: {stderr.strip()[-2000:]}")
+        check_cancelled()
         return json.loads(out.read_text(encoding="utf-8"))
 
 

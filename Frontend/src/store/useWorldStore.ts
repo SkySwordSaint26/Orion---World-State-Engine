@@ -8,7 +8,7 @@ import type {
 } from '../types/world';
 import { apiFetch } from '../api/client';
 import type { EntityResponse } from '../api/entities';
-import { getEntityDescription } from '../utils/entityDescription';
+import { entityFromResponse } from '../utils/entityFromResponse';
 
 // Everything shown comes from the API: failed or empty fetches show nothing rather than invented records.
 const titleCase = (code: string) => code.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
@@ -153,25 +153,8 @@ export const useWorldStore = create<WorldState>((set, get) => ({
 
   fetchEntitiesForWorld: async (worldId: string) => {
     try {
-      const data = await apiFetch<any[]>(`/worlds/${worldId}/entities`);
-      const mapped: Entity[] = data.map((ent: any) => ({
-        id: ent.id,
-        name: ent.canonical_name,
-        type: ent.entity_type as any,
-        description: getEntityDescription(ent),
-        alias: (ent.aliases || [])[0] || '',
-        aliases: ent.aliases || [],
-        facts: (ent.facts || []).map((f: any) => ({
-          id: f.id,
-          text: `${f.property_name}: ${f.current_version?.value ?? ''}`,
-          source: f.current_version?.chapter_id || 'System',
-          type: 'extracted',
-          property_name: f.property_name,
-          value: f.current_version?.value
-        })),
-        relationships: [],
-        appearances: []
-      }));
+      const data = await apiFetch<EntityResponse[]>(`/worlds/${worldId}/entities`);
+      const mapped = data.map(entityFromResponse);
 
       if (get().activeWorldId === worldId) set({ entities: mapped });
     } catch (e) {
@@ -281,7 +264,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
           attributes: { description: entityData.description, subtype: entityData.subtype }
         })
       });
-      createdEntity.id = res.id;
+      createdEntity = entityFromResponse(res);
     } catch (err) {
       console.error("Failed to create entity on API; not added", err);
       throw err;
@@ -321,40 +304,30 @@ export const useWorldStore = create<WorldState>((set, get) => ({
     const attributes: Record<string, unknown> = {};
     if (updated.description !== undefined) attributes.description = updated.description;
     if (updated.subtype !== undefined) attributes.subtype = updated.subtype;
+    if (updated.traits !== undefined) attributes.traits = updated.traits;
     if (Object.keys(attributes).length) body.attributes = attributes;
     const response = await apiFetch<EntityResponse>(`/worlds/${activeWorldId}/entities/${id}`, {
       method: 'PUT',
       body: JSON.stringify(body)
     });
+    if ((updated.name !== undefined && response.canonical_name !== updated.name.trim()) ||
+        (updated.type !== undefined && response.entity_type !== updated.type) ||
+        Object.entries(attributes).some(([property, value]) => JSON.stringify(
+          response.facts?.find(fact => fact.property_name === property)?.current_version?.value
+        ) !== JSON.stringify(value))) {
+      throw new Error('The backend did not confirm these changes. Your input has been kept; please retry.');
+    }
     if (get().activeWorldId !== activeWorldId) return;
     set((state) => ({
-      entities: state.entities.map((e) => e.id === id ? {
-        ...e,
-        ...updated,
-        description: getEntityDescription(response),
-        facts: (response.facts || []).map(fact => ({
-          id: fact.id,
-          text: `${fact.property_name}: ${fact.current_version?.value ?? ''}`,
-          source: fact.current_version?.chapter_id || 'System',
-          type: 'extracted',
-          property_name: fact.property_name,
-          value: fact.current_version?.value
-        }))
-      } : e)
+      entities: state.entities.map((e) => e.id === id ? { ...e, ...entityFromResponse(response) } : e)
     }));
   },
   
   deleteEntity: async (id) => {
     const activeWorldId = get().activeWorldId;
-    if (activeWorldId) {
-      try {
-        await apiFetch(`/worlds/${activeWorldId}/entities/${id}`, {
-          method: 'DELETE'
-        });
-      } catch (err) {
-        console.error("Failed to delete entity on API", err);
-      }
-    }
+    if (!activeWorldId) throw new Error('Select a world before deleting an entity.');
+    await apiFetch(`/worlds/${activeWorldId}/entities/${id}`, { method: 'DELETE' });
+    if (get().activeWorldId !== activeWorldId) return;
     set((state) => {
       const entityToDelete = state.entities.find((e) => e.id === id);
       const updatedWorlds = state.worlds.map((w) => {
@@ -391,24 +364,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
 
       set((state) => {
         const sourceEntity = state.entities.find((e) => e.id === sourceId);
-        const mappedSurvivor: Entity = {
-          id: survivor.id,
-          name: survivor.canonical_name,
-          type: survivor.entity_type as any,
-          description: getEntityDescription(survivor),
-          alias: (survivor.aliases || [])[0] || '',
-          aliases: survivor.aliases || [],
-          facts: (survivor.facts || []).map((f: any) => ({
-            id: f.id,
-            text: `${f.property_name}: ${f.current_version?.value ?? ''}`,
-            source: f.current_version?.chapter_id || 'System',
-            type: 'extracted',
-            property_name: f.property_name,
-            value: f.current_version?.value
-          })),
-          relationships: [],
-          appearances: []
-        };
+        const mappedSurvivor = entityFromResponse(survivor);
 
         const updatedWorlds = state.worlds.map((w) => {
           if (w.id === state.activeWorldId) {
@@ -545,7 +501,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
     }
   },
   
-  addFact: async (entityId, propertyOrText, valueOrType, source = 'Manual Entry') => {
+  addFact: async (entityId, propertyOrText, valueOrType) => {
     const activeWorldId = get().activeWorldId;
     let propName = propertyOrText.trim();
     let val: unknown = valueOrType;
@@ -561,58 +517,24 @@ export const useWorldStore = create<WorldState>((set, get) => ({
       }
     }
 
-    let factVersionId = `fact-${Date.now()}`;
-    if (activeWorldId) {
-      try {
-        const res = await apiFetch<any>(`/worlds/${activeWorldId}/entities/${entityId}/facts`, {
-          method: 'POST',
-          body: JSON.stringify({
-            property_name: propName,
-            value: val,
-            confidence: 1.0
-          })
-        });
-        if (res && res.id) {
-          factVersionId = res.id;
-        }
-      } catch (err) {
-        console.error("Failed to add fact on API", err);
-      }
-    }
-
+    if (!activeWorldId) throw new Error('Select a world before adding a fact.');
+    await apiFetch(`/worlds/${activeWorldId}/entities/${entityId}/facts`, {
+      method: 'POST',
+      body: JSON.stringify({ property_name: propName, value: val, confidence: 1.0 })
+    });
+    const saved = await apiFetch<EntityResponse>(`/worlds/${activeWorldId}/entities/${entityId}`);
+    if (get().activeWorldId !== activeWorldId) return;
     set((state) => ({
-      entities: state.entities.map((e) => {
-        if (e.id === entityId) {
-          const newFact = {
-            id: factVersionId,
-            text: `${propName}: ${String(val)}`,
-            source: typeof source === 'string' ? source : 'Manual Entry',
-            type: 'manual' as const,
-            property_name: propName,
-            value: val
-          };
-          return {
-            ...e,
-            facts: [...e.facts, newFact]
-          };
-        }
-        return e;
-      })
+      entities: state.entities.map((e) => e.id === entityId ? entityFromResponse(saved) : e)
     }));
+    await get().fetchContradictionsForWorld(activeWorldId);
   },
   
   deleteFact: async (entityId, factId) => {
     const activeWorldId = get().activeWorldId;
-    if (activeWorldId) {
-      try {
-        await apiFetch(`/worlds/${activeWorldId}/entities/${entityId}/facts/${factId}`, {
-          method: 'DELETE'
-        });
-      } catch (err) {
-        console.error("Failed to delete fact on API", err);
-      }
-    }
-
+    if (!activeWorldId) throw new Error('Select a world before deleting a fact.');
+    await apiFetch(`/worlds/${activeWorldId}/entities/${entityId}/facts/${factId}`, { method: 'DELETE' });
+    if (get().activeWorldId !== activeWorldId) return;
     set((state) => ({
       entities: state.entities.map((e) => {
         if (e.id === entityId) {
@@ -628,7 +550,7 @@ export const useWorldStore = create<WorldState>((set, get) => ({
   
   resolveContradiction: (id) => set((state) => {
     const updatedContradictions = state.contradictions.map((c) => 
-      c.id === id ? { ...c, resolved: true } : c
+      c.id === id ? { ...c, resolved: true, status: 'RESOLVED' as const } : c
     );
     return {
       contradictions: updatedContradictions

@@ -14,7 +14,7 @@ interface LogItem {
 export const WorldHome: React.FC = () => {
   const navigate = useNavigate();
   const { worldId } = useParams<{ worldId: string }>();
-  const { worlds, addEntity, entities, contradictions, fetchEntitiesForWorld, fetchContradictionsForWorld } = useWorldStore();
+  const { worlds, addEntity, entities, contradictions, fetchEntitiesForWorld, fetchContradictionsForWorld, manuscripts, fetchManuscriptsForWorld, setActiveManuscript, setActiveChapter } = useWorldStore();
 
   const world = worlds.find((w) => w.id === worldId);
 
@@ -22,8 +22,9 @@ export const WorldHome: React.FC = () => {
     if (worldId) {
       fetchEntitiesForWorld(worldId);
       fetchContradictionsForWorld(worldId);
+      fetchManuscriptsForWorld(worldId);
     }
-  }, [worldId, fetchEntitiesForWorld, fetchContradictionsForWorld]);
+  }, [worldId, fetchEntitiesForWorld, fetchContradictionsForWorld, fetchManuscriptsForWorld]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'character' | 'location' | 'object'>('character');
@@ -78,171 +79,40 @@ export const WorldHome: React.FC = () => {
     }
   };
 
-  const activeContradictions = contradictions.filter(c => !c.resolved).length;
+  const activeContradictions = contradictions.filter(c => !c.resolved && c.status !== 'DISMISSED').length;
+  const latestManuscript = manuscripts[0];
+  const latestChapter = latestManuscript?.chapters[0];
+  const openWritingRoom = () => {
+    if (!latestManuscript || !latestChapter) { navigate(`/worlds/${worldId}/manuscripts`); return; }
+    setActiveManuscript(latestManuscript.id); setActiveChapter(latestChapter.id);
+    navigate(`/worlds/${worldId}/manuscripts/${latestManuscript.id}`);
+  };
 
   return (
     <AppShell>
       {/* Background ambient lighting overlay */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-surface-container-high/20 via-void-black to-void-black -z-10 pointer-events-none"></div>
 
-      <main className="flex-1 min-h-screen overflow-y-auto px-8 md:px-12 py-10">
-        <div className="max-w-7xl mx-auto flex flex-col gap-8 animate-fade-in-up">
-          
-          {/* Header Section */}
-          <header className="flex flex-col gap-4 mt-4">
-            <div>
-              <span className="font-label-sm text-[10px] text-primary uppercase tracking-[0.2em] mb-1.5 block">Chronicle Workspace</span>
-              <h1 className="font-display-lg text-display-lg text-on-surface tracking-tight leading-tight">{world?.name}</h1>
-              <p className="font-body-lg text-body-lg text-on-surface-variant/80 max-w-3xl mt-3 leading-relaxed">
-                {world?.description}
-              </p>
-            </div>
-
-            {/* Stats Bar */}
-            <div className="flex flex-wrap items-center gap-6 mt-4 p-4 rounded-xl border border-starlight-white/5 bg-surface-container-low/20 backdrop-blur-md">
-              <div className="flex items-center gap-3">
-                <span className="font-display-lg text-3xl text-primary leading-none">{world?.manuscriptCount}</span>
-                <span className="font-label-sm text-[11px] text-on-surface-variant uppercase tracking-widest">Manuscripts</span>
-              </div>
-              <div className="h-6 w-px bg-starlight-white/10 hidden sm:block"></div>
-              <div className="flex items-center gap-3">
-                <span className="font-display-lg text-3xl text-primary leading-none">
-                  {entities.filter(e => e.type === 'character').length}
-                </span>
-                <span className="font-label-sm text-[11px] text-on-surface-variant uppercase tracking-widest">Characters</span>
-              </div>
-              <div className="h-6 w-px bg-starlight-white/10 hidden sm:block"></div>
-              <div className="flex items-center gap-3">
-                <span className="font-display-lg text-3xl text-primary leading-none">
-                  {entities.filter(e => e.type === 'location').length}
-                </span>
-                <span className="font-label-sm text-[11px] text-on-surface-variant uppercase tracking-widest">Locations</span>
-              </div>
-              <div className="h-6 w-px bg-starlight-white/10 hidden sm:block"></div>
-              <div className="flex items-center gap-3">
-                <span className="font-display-lg text-3xl text-primary leading-none">{entities.length}</span>
-                <span className="font-label-sm text-[11px] text-on-surface-variant uppercase tracking-widest">Lore Nodes</span>
-              </div>
-              {activeContradictions > 0 && (
-                <>
-                  <div className="h-6 w-px bg-starlight-white/10 hidden sm:block"></div>
-                  <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate(`/worlds/${worldId}/contradictions`)}>
-                    <span className="font-display-lg text-3xl text-error leading-none group-hover:scale-105 transition-transform">{activeContradictions}</span>
-                    <span className="font-label-sm text-[11px] text-error uppercase tracking-widest group-hover:underline">Contradictions</span>
-                  </div>
-                </>
-              )}
-            </div>
+      <main className="studio-page">
+        <div className="studio-page-inner space-y-9">
+          <header className="studio-world-cover rounded-lg border border-white/5 p-7 md:p-9">
+            <span className="studio-eyebrow">Archival codex · Your sovereign world</span>
+            <div className="flex flex-wrap items-end justify-between gap-6"><div className="max-w-3xl"><h1 className="studio-title">{world?.name || 'Your world'}</h1><p className="studio-intro">{world?.description || 'An unwritten horizon, ready for the first pages of its history.'}</p></div><button className="studio-primary" onClick={openWritingRoom}><span className="material-symbols-outlined text-base">history_edu</span>Open writing room</button></div>
+            <div className="mt-7 flex flex-wrap gap-x-7 gap-y-3 border-t border-white/5 pt-5 text-xs text-on-surface-variant/80"><span>{manuscripts.length} manuscripts</span><span>{entities.filter(entity => entity.type === 'character').length} characters</span><span>{entities.filter(entity => entity.type === 'location').length} locations</span><span>{entities.length} lore nodes</span><button className="text-error hover:underline" onClick={() => navigate(`/worlds/${worldId}/contradictions`)}>{activeContradictions} open contradictions</button></div>
           </header>
-
-          {/* Main Dashboard Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[480px]">
-            
-            {/* The Loom / Graph Preview */}
-            <section className="lg:col-span-2 glass-panel rounded-xl flex flex-col relative overflow-hidden group border border-starlight-white/5">
-              <div className="p-6 border-b border-starlight-white/5 flex justify-between items-center bg-surface-container-low/50 relative z-10">
-                <div>
-                  <h2 className="font-headline-md text-headline-md text-on-surface">The Loom</h2>
-                  <p className="text-xs text-on-surface-variant/50 mt-1">Visualizing network topology of characters, locations, and ciphers.</p>
-                </div>
-                <button 
-                  onClick={() => navigate(`/worlds/${worldId}/graph`)}
-                  className="font-label-sm text-label-sm text-primary hover:text-copper-glow flex items-center gap-2 transition-colors border border-primary/20 hover:border-primary/50 px-3.5 py-1.5 rounded-lg"
-                >
-                  Expand Graph 
-                  <span className="material-symbols-outlined text-[16px] font-light">open_in_new</span>
-                </button>
-              </div>
-              
-              <div 
-                className="flex-1 relative inner-glow cursor-pointer min-h-[300px]"
-                onClick={() => navigate(`/worlds/${worldId}/graph`)}
-              >
-                {/* Graph Image Background */}
-                <div 
-                  className="absolute inset-0 w-full h-full opacity-55 mix-blend-screen transition-opacity duration-700 group-hover:opacity-75 bg-cover bg-center"
-                  style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuC1BKLczsdBe6p1CT8rbCPx_y9Mg7EbS7GsCO7LfWN5WwTvYh9PW5pRD7VC38msjoiMpVcCtBYC7E6oAbyZW1DZlWJrvmSQlaj2gFl-lE2Ra5YpaL6qmc-xFppDSL0ZSXDUMU9IbYdTlX-7vfsJhrjSXS8-xQhzGLMDxS6vdXE81PZMBPd5ve6pwDPoQHIvyb0B2vWR2GkeRMMDVggCbnaVZPoF_OesXnhebnc2Vpc07qbSGVeg7zF4lg')" }}
-                />
-                
-                {/* Decorative overlay status tag */}
-                <div className="absolute bottom-6 left-6 flex items-center gap-3 bg-void-black/85 backdrop-blur-sm px-4 py-2 rounded-full border border-starlight-white/10 shadow-lg">
-                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(254,182,141,0.8)]"></div>
-                  <span className="font-label-sm text-[11px] text-on-surface-variant uppercase tracking-wider">Live Topology</span>
-                </div>
-              </div>
-            </section>
-
-            {/* Side Column: Actions & Log */}
-            <aside className="flex flex-col gap-6">
-              
-              {/* Forge Entity Actions */}
-              <div className="glass-panel rounded-xl p-6 flex flex-col gap-4 border border-starlight-white/5">
-                <h3 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest border-b border-starlight-white/5 pb-2">Forge Entity</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <button 
-                    onClick={() => handleOpenModal('character')}
-                    className="flex flex-col items-center justify-center p-4 rounded-lg border border-primary/20 bg-surface-container-lowest hover:bg-primary hover:text-void-black text-primary transition-all duration-300 group focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <span className="material-symbols-outlined mb-2 group-hover:text-void-black text-2xl font-light">group</span>
-                    <span className="font-label-sm text-xs font-semibold uppercase tracking-wider">Character</span>
-                  </button>
-                  <button 
-                    onClick={() => handleOpenModal('location')}
-                    className="flex flex-col items-center justify-center p-4 rounded-lg border border-primary/20 bg-surface-container-lowest hover:bg-primary hover:text-void-black text-primary transition-all duration-300 group focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <span className="material-symbols-outlined mb-2 group-hover:text-void-black text-2xl font-light">location_on</span>
-                    <span className="font-label-sm text-xs font-semibold uppercase tracking-wider">Location</span>
-                  </button>
-                  <button 
-                    onClick={() => handleOpenModal('object')}
-                    className="flex flex-col items-center justify-center p-4 rounded-lg border border-primary/20 bg-surface-container-lowest hover:bg-primary hover:text-void-black text-primary transition-all duration-300 group focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <span className="material-symbols-outlined mb-2 group-hover:text-void-black text-2xl font-light">category</span>
-                    <span className="font-label-sm text-xs font-semibold uppercase tracking-wider">Object</span>
-                  </button>
-                  <button 
-                    onClick={() => navigate(`/worlds/${worldId}/timeline`)}
-                    className="flex flex-col items-center justify-center p-4 rounded-lg border border-primary/20 bg-surface-container-lowest hover:bg-primary hover:text-void-black text-primary transition-all duration-300 group focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <span className="material-symbols-outlined mb-2 group-hover:text-void-black text-2xl font-light">event_note</span>
-                    <span className="font-label-sm text-xs font-semibold uppercase tracking-wider">Timeline</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Archive Log Activity list */}
-              <div className="glass-panel rounded-xl flex-1 flex flex-col overflow-hidden border border-starlight-white/5 min-h-[250px]">
-                <div className="p-6 border-b border-starlight-white/5 pb-4">
-                  <h3 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Archive Log</h3>
-                </div>
-                <div className="p-6 pt-4 flex flex-col gap-4 overflow-y-auto max-h-[300px]">
-                  {activityLogs.map((log) => (
-                    <div key={log.id} className="flex gap-4 relative">
-                      <div className="absolute left-[11px] top-6 bottom-[-20px] w-[1px] bg-starlight-white/10 last:hidden"></div>
-                      <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-1 border z-10 ${
-                        log.type === 'create' 
-                          ? 'bg-primary/10 border-primary/30 text-primary' 
-                          : 'bg-surface-container border-starlight-white/10 text-on-surface-variant'
-                      }`}>
-                        <span className="material-symbols-outlined text-[13px] font-light">
-                          {log.type === 'create' ? 'add' : log.type === 'edit' ? 'edit' : 'link'}
-                        </span>
-                      </div>
-                      <div className="flex flex-col">
-                        <p className="font-body-md text-xs text-on-surface">
-                          <span className="text-primary font-medium mr-1.5">{log.title}</span> 
-                          {log.detail}
-                        </p>
-                        <span className="font-label-sm text-[10px] text-on-surface-variant/40 mt-0.5">{log.time}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </aside>
+          <section><span className="studio-eyebrow">Codex portals · The pillars of memory</span><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              { path: 'manuscripts', icon: 'history_edu', title: 'Manuscripts', note: `${manuscripts.length} bound manuscripts` },
+              { path: 'graph', icon: 'hub', title: 'World Graph', note: 'Relationships, covenants and connections' },
+              { path: 'timeline', icon: 'hourglass_empty', title: 'Timeline', note: 'The narrative, chapter by chapter' },
+              { path: 'contradictions', icon: 'balance', title: 'Contradictions', note: `${activeContradictions} awaiting your decision` },
+            ].map((portal, index) => <button key={portal.path} onClick={() => navigate(`/worlds/${worldId}/${portal.path}`)} className="studio-card p-6 text-left transition-colors hover:border-primary/30"><div className="flex items-center justify-between text-primary"><span className="material-symbols-outlined">{portal.icon}</span><span className="text-[10px] text-on-surface-variant/40">0{index + 1} ↗</span></div><h2 className="mt-6 font-headline-md text-2xl">{portal.title}</h2><p className="mt-2 text-xs leading-relaxed text-on-surface-variant/60">{portal.note}</p></button>)}
+          </div></section>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
+            <section className="studio-card p-7"><span className="studio-eyebrow">The manuscript hearth</span><h2 className="font-headline-md text-3xl">{latestChapter ? `Chapter ${latestChapter.number}: ${latestChapter.title}` : 'Every legend begins with a page.'}</h2><p className="mt-4 font-body-lg text-xl leading-relaxed text-on-surface-variant/80">{latestChapter?.content ? latestChapter.content.slice(0, 500) : latestManuscript ? `Open ${latestManuscript.title} and continue shaping your chronicle.` : 'Bring your manuscript into the archive, or start by inscribing its characters, places and objects.'}</p><div className="mt-7 flex flex-wrap gap-3"><button className="studio-primary" onClick={openWritingRoom}>{latestManuscript ? 'Continue writing' : 'Import manuscript'}<span className="material-symbols-outlined text-base">arrow_forward</span></button><button className="studio-secondary" onClick={() => navigate(`/worlds/${worldId}/world`)}>World Ledger</button></div></section>
+            <section className="studio-card p-6"><span className="studio-eyebrow">Inscribe the world</span><h2 className="mb-5 font-headline-md text-2xl">A name, a place, a possibility.</h2><div className="grid grid-cols-2 gap-3">{(['character', 'location', 'object'] as const).map(type => <button key={type} onClick={() => handleOpenModal(type)} className="studio-secondary capitalize">{type}</button>)}<button className="studio-secondary" onClick={() => navigate(`/worlds/${worldId}/timeline`)}>Timeline</button></div><button className="studio-secondary mt-5 w-full" onClick={() => navigate(`/worlds/${worldId}/assistant`)}><span className="material-symbols-outlined text-base">forum</span>Character dialogue</button></section>
           </div>
-
+          <section className="border-t border-white/5 pt-6"><div className="mb-4 flex items-center justify-between"><h2 className="font-headline-md text-2xl">Archive Log</h2><span className="text-[10px] uppercase tracking-widest text-on-surface-variant/50">This session</span></div>{activityLogs.length === 0 ? <p className="text-sm text-on-surface-variant/50">New inscriptions from this session will appear here.</p> : <ul className="space-y-3">{activityLogs.map(log => <li key={log.id} className="flex items-center gap-4 text-sm"><span className="material-symbols-outlined text-base text-primary">add</span><span>{log.title} · {log.detail}</span><span className="ml-auto text-xs text-on-surface-variant/50">{log.time}</span></li>)}</ul>}</section>
         </div>
       </main>
 

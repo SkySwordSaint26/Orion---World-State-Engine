@@ -4,6 +4,7 @@ import { useWorldStore } from '../store/useWorldStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { apiFetch } from '../api/client';
 import type { World } from '../types/world';
+import { AppShell } from '../components/AppShell';
 
 export const Worlds: React.FC = () => {
   const navigate = useNavigate();
@@ -68,114 +69,44 @@ export const Worlds: React.FC = () => {
     navigate('/signin');
   };
 
+  const featured = worlds[0];
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center relative font-body-md text-on-surface bg-void-black selection:bg-primary/20 select-none">
-      
-      {/* Background radial glow */}
-      <div className="ambient-glow fixed inset-0 w-full h-full opacity-60"></div>
-      
-      {/* Header Section */}
-      <header className="absolute top-12 left-0 right-0 text-center z-10 flex flex-col items-center gap-3">
-        <h1 className="font-display-lg text-display-lg text-starlight-white tracking-tight animate-fade-in-up">Where will you go?</h1>
-        <p className="font-body-lg text-body-lg text-on-surface-variant/80 max-w-2xl text-center opacity-80 px-gutter animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-          Select a chronicle from the archive or forge a new realm in the dark.
-        </p>
-        {user && (
-          <p className="text-xs text-copper-glow/80 font-label-sm uppercase tracking-widest mt-1">
-            Logged in as {user.email}
-          </p>
-        )}
-      </header>
-
-      {/* Main Grid */}
-      <main className="w-full max-w-7xl px-gutter pt-48 pb-24 z-10 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-        {error && (
-          <div className="mb-8 max-w-md mx-auto p-4 rounded bg-amber-950/40 border border-amber-500/30 text-amber-300 text-xs text-center">
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <span className="material-symbols-outlined text-4xl text-copper-glow animate-spin mb-4">refresh</span>
-            <p className="text-sm text-on-surface-variant/70">Fetching archive records...</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12">
-            
-            {/* Render worlds dynamically */}
-            {worlds.map((world) => (
-              <div 
-                key={world.id}
-                onClick={() => handleSelectWorld(world.id)}
-                className="book-cover-hover relative group flex flex-col text-left h-[420px] rounded-lg border border-starlight-white/10 bg-surface-container-low overflow-hidden focus:outline-none focus:ring-1 focus:ring-copper-glow cursor-pointer"
-              >
-                {/* Cover Art Background */}
-                {/* Cover Art Shadow overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-void-black via-void-black/75 to-transparent z-10" />
-                
-                {/* Delete action button */}
-                <button
-                  type="button"
-                  onClick={(e) => handleDeleteWorld(e, world.id)}
-                  title="Delete World"
-                  className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-full bg-void-black/60 border border-starlight-white/20 text-on-surface-variant/70 hover:text-red-400 hover:border-red-400/50"
-                >
-                  <span className="material-symbols-outlined text-base">delete</span>
-                </button>
-
-                {/* Card Contents */}
-                <div className="relative mt-auto p-6 z-20 flex flex-col gap-2 w-full">
-                  <h2 className="font-headline-lg text-headline-lg text-starlight-white group-hover:text-primary transition-colors">
-                    {world.name}
-                  </h2>
-                  <p className="line-clamp-2 text-xs text-on-surface-variant/70">
-                    {world.description}
-                  </p>
-                  
-                  {/* Stats */}
-                  <div className="flex items-center gap-4 mt-2">
-                    <span className="flex items-center gap-1 font-label-sm text-[11px] text-on-surface-variant/80">
-                      <span className="material-symbols-outlined text-[15px] font-light">menu_book</span>
-                      {world.manuscriptCount} {world.manuscriptCount === 1 ? 'Manuscript' : 'Manuscripts'}
-                    </span>
-                    <span className="flex items-center gap-1 font-label-sm text-[11px] text-on-surface-variant/80">
-                      <span className="material-symbols-outlined text-[15px] font-light">group</span>
-                      {world.entityCount} Entities
-                    </span>
-                  </div>
-                </div>
+    <AppShell>
+      <main className="studio-page">
+        <div className="studio-page-inner space-y-9">
+          <header className="flex flex-wrap items-end justify-between gap-5">
+            <div><span className="studio-eyebrow">Sanctum · Nocturne Register</span>
+              <h1 className="studio-title">Return to your worlds.</h1>
+              <p className="studio-intro">A name, a place, a universe taking shape. Pick up a chronicle or begin another.</p>
+            </div>
+            <button className="studio-primary" onClick={handleCreateNewWorld}><span className="material-symbols-outlined text-base">add</span>Inscribe New World</button>
+          </header>
+          {error && <div role="alert" className="studio-card flex items-center justify-between gap-4 p-4 text-error">{error}<button className="studio-secondary" onClick={fetchWorlds}>Retry</button></div>}
+          {loading ? <p role="status" className="py-16 text-center text-on-surface-variant">Fetching archive records…</p> : <>
+            {featured && <section className="studio-card studio-world-cover relative overflow-hidden p-7 md:p-12">
+              <div className="pointer-events-none absolute right-16 top-16 hidden opacity-70 lg:block"><div className="studio-orbit"><span className="material-symbols-outlined text-5xl text-primary/60">auto_awesome</span></div></div>
+              <span className="studio-eyebrow">From your archive</span>
+              <div className="relative max-w-2xl pt-8"><h2 className="font-display-lg text-display-lg">{featured.name}</h2>
+                <p className="mt-4 max-w-xl font-body-lg text-xl leading-relaxed text-on-surface-variant">{featured.description || 'An unwritten horizon. Your world begins here.'}</p>
+                <p className="mt-6 text-xs text-on-surface-variant/70">{featured.manuscriptCount} manuscripts · {featured.entityCount} bound entities</p>
+                <button onClick={() => handleSelectWorld(featured.id)} className="studio-primary mt-7">Open World Studio<span className="material-symbols-outlined text-base">arrow_forward</span></button>
               </div>
-            ))}
-
-            {/* Forge New World Tile */}
-            <button 
-              onClick={handleCreateNewWorld}
-              className="book-cover-hover relative group flex flex-col items-center justify-center text-center h-[420px] rounded-lg border border-dashed border-starlight-white/20 bg-transparent hover:bg-surface-container-low/30 hover:border-copper-glow/50 focus:outline-none focus:ring-1 focus:ring-copper-glow transition-all duration-300"
-            >
-              <div className="w-16 h-16 rounded-full border border-starlight-white/20 flex items-center justify-center mb-6 group-hover:border-copper-glow/50 group-hover:bg-copper-glow/10 transition-colors">
-                <span className="material-symbols-outlined text-3xl text-starlight-white/60 group-hover:text-copper-glow transition-colors font-light">add</span>
+            </section>}
+            <section>
+              <div className="mb-5 flex items-center justify-between"><h2 className="font-headline-md text-2xl">Authored universes</h2><span className="text-xs text-on-surface-variant/60">{worlds.length} {worlds.length === 1 ? 'world' : 'worlds'}</span></div>
+              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                {worlds.map(world => <article key={world.id} className="studio-card group flex min-h-56 flex-col p-6 transition-colors hover:border-primary/30">
+                  <div className="mb-5 flex items-center justify-between"><span className="material-symbols-outlined text-primary/70">public</span><button onClick={event => handleDeleteWorld(event, world.id)} title="Delete World" aria-label={`Delete ${world.name}`} className="p-1 text-on-surface-variant/60 hover:text-error"><span className="material-symbols-outlined text-base">delete</span></button></div>
+                  <button className="text-left" onClick={() => handleSelectWorld(world.id)}><h3 className="font-headline-md text-2xl group-hover:text-primary">{world.name}</h3><p className="mt-2 line-clamp-3 text-sm leading-relaxed text-on-surface-variant/70">{world.description || 'A new chronicle, waiting for its first inscription.'}</p></button>
+                  <div className="mt-auto flex items-center justify-between pt-6 text-xs text-on-surface-variant/60"><span>{world.manuscriptCount} manuscripts · {world.entityCount} entities</span><button onClick={() => handleSelectWorld(world.id)} className="text-primary">Open <span aria-hidden="true">↗</span></button></div>
+                </article>)}
+                <button onClick={handleCreateNewWorld} className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-outline-variant/50 p-6 text-on-surface-variant hover:border-primary hover:text-primary"><span className="material-symbols-outlined text-3xl">add</span><span className="font-headline-md text-xl">Forge New World</span><span className="text-xs">Every world begins as a fragment.</span></button>
               </div>
-              <h2 className="font-headline-md text-headline-md text-starlight-white/80 group-hover:text-starlight-white transition-colors">
-                Forge New World
-              </h2>
-              <p className="mt-2 font-label-sm text-label-sm text-on-surface-variant/60 max-w-[200px]">
-                Initialize a blank canvas in the archive.
-              </p>
-            </button>
-
-          </div>
-        )}
+            </section>
+          </>}
+          <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-white/5 py-5 text-xs text-on-surface-variant/60"><span>{user?.email}</span><button onClick={handleLogout} className="flex items-center gap-2 hover:text-primary"><span className="material-symbols-outlined text-base">lock_open</span>Lock Archive (Logout)</button></footer>
+        </div>
       </main>
-
-      {/* Bottom utility links */}
-      <footer className="absolute bottom-8 left-0 right-0 text-center z-10 flex justify-center gap-8 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-        <button onClick={handleLogout} className="font-label-sm text-label-sm text-on-surface-variant/60 hover:text-primary transition-colors flex items-center gap-2">
-          <span className="material-symbols-outlined text-[16px] font-light">lock_open</span>
-          Lock Archive (Logout)
-        </button>
-      </footer>
-
-    </div>
+    </AppShell>
   );
 };

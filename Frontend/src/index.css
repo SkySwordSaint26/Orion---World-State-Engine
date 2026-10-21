@@ -4,9 +4,9 @@
 
 @layer base {
   body {
-    background-color: #000000; /* The Void */
-    color: #e5e1e4; /* on-surface */
-    font-family: 'Geist', sans-serif;
+    background-color: #141312;
+    color: #e6e1df;
+    font-family: 'Inter', sans-serif;
   }
 }
 
@@ -29,10 +29,80 @@
 
 /* Glassmorphism Panels */
 .glass-panel {
-  background-color: rgba(29, 29, 29, 0.4);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background-color: #1c1b1a;
   border: 1px solid rgba(250, 250, 250, 0.08);
+}
+
+@layer base {
+  :focus-visible { outline: 2px solid #f9b989; outline-offset: 3px; }
+  button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+  button:disabled { cursor: not-allowed; }
+  input, textarea, select { accent-color: #c48b5e; color-scheme: dark; }
+  input::placeholder, textarea::placeholder { color: #9e8e83; }
+  ::selection { background: #c48b5e40; color: #f7f4ee; }
+}
+
+@layer components {
+  .studio-shell { @apply flex h-dvh w-full overflow-hidden bg-surface text-on-surface; }
+  .studio-rail { @apply fixed inset-y-0 left-0 z-50 flex w-16 flex-col border-r border-white/5 bg-surface-container-lowest px-2 py-4; }
+  .studio-mark { @apply flex h-10 items-center justify-center text-primary; }
+  .studio-mark .material-symbols-outlined { @apply text-2xl; }
+  .studio-nav-link { @apply relative flex min-h-11 items-center justify-center gap-3 rounded p-3 text-on-surface-variant/60 transition-colors hover:bg-white/5 hover:text-primary; }
+  .studio-nav-link .material-symbols-outlined { @apply text-xl; }
+  .studio-nav-link.is-active { @apply bg-primary/10 text-primary; }
+  .studio-nav-link.is-active::before { content: ''; @apply absolute bottom-3 left-0 top-3 w-0.5 bg-primary; }
+  .rail-label { @apply sr-only; }
+  .nav-badge { @apply absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 text-[9px] text-void-black; }
+  .studio-stage { @apply ml-16 flex min-w-0 flex-1 flex-col overflow-hidden; }
+  .studio-topbar { @apply z-30 flex min-h-14 shrink-0 items-center gap-3 border-b border-white/5 bg-surface px-4 lg:px-7; }
+  .studio-avatar { @apply flex h-7 w-7 items-center justify-center rounded bg-primary-container text-xs font-medium text-on-primary-container; }
+  .studio-content { @apply relative flex min-h-0 min-w-0 flex-1 overflow-hidden; }
+  .studio-content > main { min-height: 0; height: 100%; }
+  .studio-page { @apply relative w-full flex-1 overflow-y-auto px-5 py-8 md:px-10 md:py-10; }
+  .studio-page-inner { @apply mx-auto w-full max-w-7xl; }
+  .studio-eyebrow { @apply mb-3 block text-[10px] font-medium uppercase tracking-[0.18em] text-primary; }
+  .studio-title { @apply font-display-lg text-display-lg text-on-surface; }
+  .studio-intro { @apply mt-3 max-w-2xl font-body-lg text-xl leading-relaxed text-on-surface-variant/75; }
+  .studio-card { @apply rounded-lg border border-white/[0.07] bg-surface-container-low; }
+  .studio-primary { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded bg-primary-container px-4 py-2 text-xs font-medium text-on-primary-container transition-colors hover:bg-primary disabled:opacity-40; }
+  .studio-secondary { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded border border-outline-variant/50 px-4 py-2 text-xs text-on-surface-variant transition-colors hover:border-primary/50 hover:text-primary disabled:opacity-40; }
+  .studio-field { @apply w-full rounded border border-outline-variant/50 bg-surface-container-lowest px-3 py-3 text-sm text-on-surface focus:border-primary; }
+  .studio-entity-inspector { @apply fixed bottom-0 right-0 top-14 z-[70] w-[360px] max-w-[100vw] animate-fade-in-up border-l border-outline-variant/40 bg-surface-container-low shadow-2xl; }
+  .studio-dialog { width: min(44rem, calc(100vw - 2rem)); max-height: 90dvh; @apply fixed inset-0 m-auto overflow-visible border-0 bg-transparent p-0 text-on-surface; }
+  .studio-dialog::backdrop { background: #0c0b0ab8; backdrop-filter: blur(3px); }
+  .studio-world-cover { background: radial-gradient(ellipse at 85% 20%, #c48b5e18, transparent 60%), linear-gradient(120deg, #211f1e, #0c0b0a); }
+  .studio-orbit { @apply relative flex h-40 w-40 items-center justify-center rounded-full border border-primary/20; }
+  .studio-orbit::before, .studio-orbit::after { content: ''; @apply absolute inset-5 rounded-full border border-primary/10; }
+  .studio-orbit::after { @apply -inset-5 border-dashed; }
+  .ledger-list { @apply grid grid-cols-1 gap-4 pb-12; }
+  .ledger-entry { @apply min-h-36 rounded-lg border border-white/[0.07] bg-surface-container-low p-6 transition-colors hover:border-primary/40; }
+  .ledger-entry h3 { @apply font-headline-md text-2xl font-normal; }
+  .ledger-entry p { @apply max-w-3xl text-sm leading-relaxed; }
+  .writing-layout { @apply relative flex h-full min-w-0 flex-1 overflow-hidden bg-surface select-text; }
+  .writing-chapters { @apply flex w-60 shrink-0 flex-col border-r border-white/5 bg-surface-container-lowest; }
+  .writing-toolbar { @apply z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/5 px-5 py-3; }
+  .writing-paper { @apply flex-1 overflow-y-auto px-6 py-12 lg:px-12; }
+  .writing-paper .prose, .writing-paper textarea { font-family: 'Newsreader', Georgia, serif; font-size: 1.2rem; line-height: 1.85; color: #d6c3b7; }
+  .writing-paper article { max-width: 45rem; }
+  .graph-sidebar { @apply w-60 shrink-0 overflow-y-auto border-r border-white/5 bg-surface-container-lowest p-5; }
+  .timeline-details { @apply w-80 shrink-0 overflow-y-auto border-l border-white/5 bg-surface-container-low; }
+  .graph-relationship { width: min(360px, 42vw); z-index: 40; }
+}
+
+@media (max-width: 767px) {
+  .studio-rail { width: 240px; transform: translateX(-100%); transition: transform .2s ease; }
+  .studio-rail.is-open { transform: translateX(0); }
+  .studio-rail .studio-nav-link, .studio-rail .studio-mark { justify-content: flex-start; }
+  .studio-rail .rail-label { position: static; width: auto; height: auto; padding: 0; margin: 0; overflow: visible; clip: auto; white-space: normal; }
+  .studio-stage { margin-left: 0; }
+  .writing-chapters { position: absolute; inset: 0 auto 0 0; z-index: 35; width: min(280px, 85vw); box-shadow: 15px 0 30px #0008; }
+  .graph-sidebar { position: absolute; inset: 0 auto 0 0; z-index: 35; width: min(260px, 85vw); }
+  .timeline-details { position: absolute; inset: 0 0 0 auto; z-index: 35; width: min(340px, 90vw); }
+  .graph-relationship { position: absolute; inset: 0 0 0 auto; width: min(360px, 92vw); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
 .glass-header {

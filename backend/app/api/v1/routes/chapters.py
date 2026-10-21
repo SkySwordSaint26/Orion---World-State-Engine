@@ -4,9 +4,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_current_user_world
 from app.models.world import World
+from app.models.chapter_version import ChapterVersion
 from app.schemas.chapter import ChapterResponse, ChapterUpdate, ChapterVersionResponse, ChapterCreate
 from app.services.chapter_service import ChapterService
 from app.workers.dispatch import dispatch_extraction_job, ExtractionDispatchError
+from app.utils.file_handler import read_file_text
 
 router = APIRouter()
 
@@ -48,7 +50,7 @@ def get_chapter(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found")
 
     content = service.get_chapter_content(chapter_id)
-    latest_ver = chapter.versions[0] if chapter.versions else None
+    latest_ver = service.chapter_repo.get_latest_version(chapter.id)
     latest_resp = None
     if latest_ver:
         latest_resp = ChapterVersionResponse(
@@ -126,6 +128,9 @@ def create_chapter(
     db: Session = Depends(get_db)
 ):
     service = ChapterService(db)
+    manuscript = service.manuscript_repo.get(manuscript_id)
+    if not manuscript or manuscript.world_id != world.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Manuscript not found")
     chapter = service.create_chapter(manuscript_id, chapter_in.title, chapter_in.content or "")
     return ChapterResponse(
         id=chapter.id,
@@ -175,3 +180,39 @@ def list_chapter_versions(
             created_at=v.created_at
         ) for v in versions
     ]
+
+
+@router.get("/{world_id}/chapters/{chapter_id}/versions/{version_id}")
+def get_chapter_version(
+    world_id: str,
+    chapter_id: str,
+    version_id: str,
+    world: World = Depends(get_current_user_world),
+    db: Session = Depends(get_db),
+):
+    chapter = ChapterService(db).get_chapter(chapter_id)
+    if not chapter or not chapter.manuscript or chapter.manuscript.world_id != world.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chapter not found")
+    version = db.get(ChapterVersion, version_id)
+    if not version or version.chapter_id != chapter.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+    try:
+        content = read_file_text(version.content_path) if version.content_path else ""
+    except OSError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The stored version text is unavailable.")
+    return {**ChapterVersionResponse.model_validate(version).model_dump(), "content": content}
+
+
+@router.post("/{world_id}/chapters/{chapter_id}/versions/{version_id}/restore", status_code=status.HTTP_202_ACCEPTED)
+def restore_chapter_version(
+    world_id: str,
+    chapter_id: str,
+    version_id: str,
+    background_tasks: BackgroundTasks,
+    world: World = Depends(get_current_user_world),
+    db: Session = Depends(get_db),
+):
+    saved = get_chapter_version(world_id, chapter_id, version_id, world, db)
+    return update_chapter_content(
+        world_id, chapter_id, ChapterUpdate(content=saved["content"]), background_tasks, world, db
+    )

@@ -287,10 +287,11 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
   };
 
   const handleRemoveAlias = async (aliasToRemove: string) => {
+    setAliasError(null);
     try {
       await removeAlias(displayEntity.id, aliasToRemove);
     } catch (err: any) {
-      console.error('Failed to remove alias:', err);
+      setAliasError(err?.message || 'Failed to remove alias.');
     }
   };
 
@@ -315,6 +316,7 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
 
   const handleAddTrait = async () => {
     if (newTrait.trim()) {
+      setEntityError(null);
       const updatedTraits = [...(displayEntity.traits || []), newTrait.trim()];
       try {
         await updateEntity(displayEntity.id, { traits: updatedTraits });
@@ -328,6 +330,7 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
 
   const handleRemoveTrait = (traitIndex: number) => {
     if (displayEntity.traits) {
+      setEntityError(null);
       const updatedTraits = displayEntity.traits.filter((_, idx) => idx !== traitIndex);
       updateEntity(displayEntity.id, { traits: updatedTraits }).catch(reportEntityError);
     }
@@ -372,12 +375,12 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
   };
 
   return (
-    <div className="flex flex-col h-full bg-surface-container-low/95 backdrop-blur-xl border-l border-starlight-white/10 shadow-2xl relative overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-surface-container-low">
       {/* Decorative Blur Ambient */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
 
       {/* Header */}
-      <div className="p-6 border-b border-starlight-white/5 bg-gradient-to-b from-surface-container-highest/30 to-transparent pt-8">
+      <div className="p-6 border-b border-white/5">
         <div className="flex justify-between items-start mb-4 relative z-10">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -386,7 +389,7 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
               </span>
               <label className="text-[10px] font-label-sm text-on-surface-variant/60 uppercase tracking-widest">Type:</label>
               <select
-                value={displayEntity.type}
+                aria-label="Entity type" value={displayEntity.type}
                 onChange={(e) => updateEntity(displayEntity.id, { type: e.target.value as Entity['type'] }).catch(reportEntityError)}
                 className={`font-label-sm text-[11px] uppercase tracking-wider py-0.5 px-2.5 rounded-full border bg-surface-container cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary ${getTypeColor(displayEntity.type)}`}
               >
@@ -398,7 +401,7 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
             </div>
             <h2 className="font-headline-md text-headline-md text-starlight-white leading-tight mt-1">{displayEntity.name}</h2>
           </div>
-          <button onClick={onClose} className="text-on-surface-variant hover:text-white transition-colors p-1 hover:bg-white/5 rounded-full">
+          <button aria-label="Close entity" onClick={onClose} className="text-on-surface-variant hover:text-white transition-colors p-1 hover:bg-white/5 rounded-full">
             <span className="material-symbols-outlined font-light">close</span>
           </button>
         </div>
@@ -504,7 +507,7 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
                         type="text"
                         value={newAlias}
                         onChange={(e) => setNewAlias(e.target.value)}
-                        placeholder="New alias..."
+                        aria-label="New alias" placeholder="New alias..."
                         autoFocus
                         className="bg-surface-container-high border border-outline-variant/30 text-xs rounded px-2 py-0.5 text-starlight-white focus:outline-none focus:ring-1 focus:ring-primary w-28"
                       />
@@ -570,7 +573,7 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
                       <button 
                         onClick={() => handleRemoveTrait(idx)}
                         className="opacity-0 group-hover/trait:opacity-100 hover:text-error transition-opacity"
-                        title="Remove trait"
+                        title="Remove trait" aria-label={`Remove trait ${trait}`}
                       >
                         <span className="material-symbols-outlined text-[10px]">close</span>
                       </button>
@@ -584,10 +587,10 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
                         onChange={(e) => setNewTrait(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddTrait()}
                         className="bg-surface-container-high border border-outline-variant/30 text-xs rounded px-2 py-0.5 text-starlight-white focus:outline-none focus:ring-1 focus:ring-primary w-24"
-                        placeholder="New trait..."
+                        aria-label="New trait" placeholder="New trait..."
                         autoFocus
                       />
-                      <button onClick={handleAddTrait} className="text-primary hover:text-white">
+                      <button aria-label="Save trait" onClick={handleAddTrait} className="text-primary hover:text-white">
                         <span className="material-symbols-outlined text-sm">check</span>
                       </button>
                       <button onClick={() => setIsAddingTrait(false)} className="text-on-surface-variant">
@@ -596,7 +599,7 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
                     </div>
                   ) : (
                     <button 
-                      onClick={() => setIsAddingTrait(true)}
+                      aria-label="Add trait" onClick={() => setIsAddingTrait(true)}
                       className="px-2.5 py-1 bg-transparent text-primary/60 hover:text-primary font-label-sm text-[11px] rounded border border-dashed border-primary/30 hover:border-primary/60 transition-colors flex items-center gap-1"
                     >
                       <span className="material-symbols-outlined text-[10px]">add</span> Add
@@ -631,7 +634,7 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
                         type="text"
                         value={factProperty}
                         onChange={(e) => setFactProperty(e.target.value)}
-                        placeholder="e.g. status, title, weapon"
+                        aria-label="Fact property" placeholder="e.g. status, title, weapon"
                         className="w-full bg-void-black text-xs text-starlight-white placeholder:text-on-surface-variant/40 rounded border border-starlight-white/10 p-2 focus:border-primary focus:ring-0 focus:outline-none"
                         required
                       />
@@ -642,7 +645,7 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
                         type="text"
                         value={factValue}
                         onChange={(e) => setFactValue(e.target.value)}
-                        placeholder="e.g. deceased, High Commander"
+                        aria-label="Fact value" placeholder="e.g. deceased, High Commander"
                         className="w-full bg-void-black text-xs text-starlight-white placeholder:text-on-surface-variant/40 rounded border border-starlight-white/10 p-2 focus:border-primary focus:ring-0 focus:outline-none"
                         required
                       />
@@ -693,9 +696,9 @@ export const EntityPanel: React.FC<EntityPanelProps> = ({ entityId, onClose }) =
                         </div>
                       </div>
                       <button 
-                        onClick={() => deleteFact(displayEntity.id, fact.id)}
+                        onClick={() => { setEntityError(null); Promise.resolve(deleteFact(displayEntity.id, fact.id)).catch(reportEntityError); }}
                         className="opacity-0 group-hover:opacity-100 text-on-surface-variant/40 hover:text-error transition-all p-1"
-                        title="Delete fact"
+                        title="Delete fact" aria-label="Delete fact"
                       >
                         <span className="material-symbols-outlined text-sm font-light">delete</span>
                       </button>

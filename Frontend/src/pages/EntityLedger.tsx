@@ -194,8 +194,8 @@ export const EntityLedger: React.FC = () => {
       {/* Background gradients */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-surface-container-high/10 via-void-black to-void-black -z-10 pointer-events-none"></div>
 
-      <main className="flex-1 min-h-screen overflow-y-auto px-8 md:px-12 py-10">
-        <div className="max-w-7xl mx-auto flex flex-col gap-8 animate-fade-in-up">
+      <main className="studio-page">
+        <div className="studio-page-inner flex flex-col gap-7">
           
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-starlight-white/5 pb-6">
@@ -204,8 +204,8 @@ export const EntityLedger: React.FC = () => {
                 <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
                 <span className="font-label-sm text-[10px] text-primary uppercase tracking-[0.25em] font-medium">World Archive</span>
               </div>
-              <h1 className="font-display-lg text-3xl md:text-4xl text-starlight-white font-light tracking-tight mb-2">
-                World Ledger
+              <h1 className="studio-title mb-2">
+                The World’s Register
               </h1>
               <p className="font-body-md text-sm md:text-base text-on-surface-variant/70 leading-relaxed max-w-2xl">
                 Browse, search, and manage the canon characters, landmarks, artifacts, and events of your universe.
@@ -234,7 +234,7 @@ export const EntityLedger: React.FC = () => {
               <button 
                 onClick={() => handleOpenCreateDrawer('character')}
                 aria-label="Forge Entity"
-                className="flex items-center gap-2 font-label-sm text-xs px-4 py-2.5 rounded-lg uppercase tracking-wider font-semibold bg-primary hover:bg-copper-glow text-void-black shadow-lg shadow-primary/10 hover:shadow-primary/25 transition-all duration-300"
+                className="flex items-center gap-2 font-label-sm text-xs px-4 py-2.5 rounded-lg uppercase tracking-wider font-semibold bg-primary-container hover:bg-primary text-on-primary-container shadow-lg shadow-primary/10 hover:shadow-primary/25 transition-all duration-300"
               >
                 <span className="material-symbols-outlined text-base font-medium">add</span>
                 Forge Entity
@@ -255,17 +255,17 @@ export const EntityLedger: React.FC = () => {
               ] as const).map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  aria-pressed={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-label-sm text-xs uppercase tracking-wider transition-all ${
                     activeTab === tab.id 
-                      ? 'bg-primary text-void-black font-semibold shadow-sm' 
+                      ? 'bg-surface-container-high text-primary font-medium'
                       : 'text-on-surface-variant hover:text-white hover:bg-white/5'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[15px] font-light">{tab.icon}</span>
                   <span>{tab.label}</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                    activeTab === tab.id ? 'bg-void-black/20 text-void-black font-bold' : 'bg-white/5 text-on-surface-variant/60'
+                    activeTab === tab.id ? 'bg-primary/10 text-primary' : 'bg-white/5 text-on-surface-variant/60'
                   }`}>
                     {tab.count}
                   </span>
@@ -283,13 +283,13 @@ export const EntityLedger: React.FC = () => {
             </div>
 
             {/* Search Input */}
-            <div className="relative group min-w-[280px]">
+            <div className="relative group min-w-0 lg:min-w-[280px]">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40 text-lg group-focus-within:text-primary transition-colors font-light">search</span>
               <input 
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search ledger entries by name or lore..."
+                aria-label="Search ledger" placeholder="Search ledger entries by name or lore..."
                 className="w-full bg-surface-container-lowest border border-starlight-white/10 rounded-xl px-10 py-2.5 font-body-md text-xs text-on-surface placeholder:text-on-surface-variant/30 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all"
               />
               {searchQuery && (
@@ -379,7 +379,7 @@ export const EntityLedger: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-24">
+            <div className="ledger-list">
               {filteredEntities.map((e) => {
                 const isSelected = selectedIds.includes(e.id);
 
@@ -393,10 +393,10 @@ export const EntityLedger: React.FC = () => {
                         setActiveEntity(e.id);
                       }
                     }}
-                    className={`group relative flex flex-col justify-between rounded-2xl p-5 sm:p-6 transition-all duration-300 cursor-pointer overflow-hidden backdrop-blur-md ${
+                    tabIndex={0} role="button" onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); if (isSelectMode) toggleSelect(e.id); else setActiveEntity(e.id); } }} className={`ledger-entry group relative flex flex-col justify-between cursor-pointer overflow-hidden ${
                       isSelected 
                         ? 'bg-primary/10 border-2 border-primary ring-1 ring-primary/40 shadow-[0_0_25px_rgba(254,182,141,0.2)]' 
-                        : 'bg-surface-container-low/40 hover:bg-surface-container-low/75 border border-starlight-white/10 hover:border-primary/40 hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(0,0,0,0.6),0_0_20px_rgba(254,182,141,0.06)]'
+                        : 'bg-surface-container-low hover:border-primary/40'
                     }`}
                   >
                     {/* Checkbox badge when in selection mode */}
@@ -437,7 +437,7 @@ export const EntityLedger: React.FC = () => {
                       </h3>
 
                       {/* Subtype & Alias */}
-                      <div className="flex flex-wrap items-center gap-1.5 mb-3 min-h-[22px]">
+                      {(e.subtype || e.alias) && <div className="flex flex-wrap items-center gap-1.5 mb-3">
                         {e.subtype && (
                           <span className="text-[10px] font-label-sm uppercase tracking-wider text-on-surface-variant/70 bg-white/5 border border-white/5 px-2 py-0.5 rounded">
                             {e.subtype}
@@ -448,7 +448,7 @@ export const EntityLedger: React.FC = () => {
                             aka "{e.alias}"
                           </span>
                         )}
-                      </div>
+                      </div>}
 
                       {/* Synopsis */}
                       <p className="font-body-md text-xs text-on-surface-variant/80 leading-relaxed line-clamp-3 mb-4">
@@ -628,7 +628,7 @@ export const EntityLedger: React.FC = () => {
                       type="button"
                       disabled={isMerging}
                       onClick={handleExecuteMerge}
-                      className="px-5 py-2 bg-primary hover:bg-copper-glow text-void-black font-semibold text-xs rounded uppercase tracking-wider transition-all disabled:opacity-50"
+                      className="px-5 py-2 bg-primary-container hover:bg-primary text-on-primary-container font-semibold text-xs rounded uppercase tracking-wider transition-all disabled:opacity-50"
                     >
                       {isMerging ? 'Merging...' : 'Confirm & Execute Merge'}
                     </button>
@@ -871,7 +871,7 @@ export const EntityLedger: React.FC = () => {
                 type="submit"
                 form="forge-entity-form"
                 disabled={isCreating}
-                className="px-6 py-2.5 bg-primary hover:bg-copper-glow text-void-black font-label-sm text-xs uppercase tracking-widest font-semibold rounded-lg shadow-lg hover:shadow-primary/20 transition-all duration-300"
+                className="px-6 py-2.5 bg-primary-container hover:bg-primary text-on-primary-container font-label-sm text-xs uppercase tracking-widest font-semibold rounded-lg shadow-lg hover:shadow-primary/20 transition-all duration-300"
               >
                 {isCreating ? 'Creating...' : 'Forge Entity'}
               </button>

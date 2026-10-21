@@ -28,6 +28,9 @@ def update_job_progress(job_id: str, db: Optional[Session] = None):
         job = session.query(ProcessingJob).filter(ProcessingJob.id == job_id).first()
         if not job:
             return
+        session.refresh(job, with_for_update=True)
+        if job.status == JobStatus.CANCELLED.value:
+            return
 
         runs = session.query(ExtractionRun).filter(ExtractionRun.processing_job_id == job_id).all()
         if not runs:

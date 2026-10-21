@@ -56,10 +56,11 @@ export const Manuscripts: React.FC = () => {
     if (isUploading) return;
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.txt,.pdf,.docx,.epub';
+    input.accept = '.txt,.md,.pdf,.docx';
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file && worldId) {
+        if (!/\.(txt|md|pdf|docx)$/i.test(file.name)) { alert('Upload TXT, Markdown, DOCX or PDF. EPUB is not supported.'); return; }
         setIsUploading(true);
         const formData = new FormData();
         formData.append('file', file);
@@ -118,16 +119,16 @@ export const Manuscripts: React.FC = () => {
       {/* Background elements */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-deep-charcoal/40 via-void-black to-void-black -z-10 pointer-events-none"></div>
 
-      <main className="flex-1 min-h-screen overflow-y-auto px-8 md:px-12 py-10">
-        <div className="max-w-5xl mx-auto flex flex-col gap-8 animate-fade-in-up">
+      <main className="studio-page">
+        <div className="studio-page-inner flex flex-col gap-8">
           
           {/* Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-starlight-white/5 pb-6">
             <div>
               <span className="font-label-sm text-[10px] text-primary uppercase tracking-[0.2em] mb-1.5 block">Chronicle Library</span>
-              <h2 className="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-starlight-white mb-2">Manuscripts Archive</h2>
+              <h2 className="studio-title mb-2">Bring in the pages.</h2>
               <p className="font-body-lg text-body-lg text-on-surface-variant/80 max-w-2xl leading-relaxed">
-                Organize your primary texts. Extract entities into the world ledger automatically.
+                Your manuscripts, chapter by chapter. We’ll look for the world inside them.
               </p>
             </div>
             <div className="flex items-center gap-4 shrink-0">
@@ -144,6 +145,9 @@ export const Manuscripts: React.FC = () => {
             </div>
           </div>
 
+          <section className="studio-card border-dashed p-7 text-center md:p-10">
+            <span className="material-symbols-outlined text-3xl text-primary">upload_file</span><h2 className="mt-3 font-headline-md text-2xl">Lay your chapters onto the desk</h2><p className="mt-3 text-sm text-on-surface-variant/60">Import TXT, Markdown, DOCX or PDF. Your existing chapters stay in the archive below.</p><button disabled={isUploading} onClick={handleAddManuscript} className="studio-primary mt-5">{isUploading ? 'Uploading…' : 'Browse manuscript files'}</button>
+          </section>
           {loading ? (
             <div className="py-20 text-center text-sm text-copper-glow flex items-center justify-center gap-2">
               <span className="material-symbols-outlined animate-spin">refresh</span>
@@ -169,7 +173,7 @@ export const Manuscripts: React.FC = () => {
                   >
                     {/* Folder Header */}
                     <div 
-                      onClick={() => handleToggleManuscript(ms.id)}
+                      role="button" tabIndex={0} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleToggleManuscript(ms.id); } }} onClick={() => handleToggleManuscript(ms.id)}
                       className="flex items-center justify-between p-4 cursor-pointer group border-b border-starlight-white/5 bg-gradient-to-b from-surface-container-highest/20 to-transparent"
                     >
                       <div className="flex items-center gap-4">
@@ -195,7 +199,7 @@ export const Manuscripts: React.FC = () => {
                         {ms.chapters.map((ch) => (
                           <div 
                             key={ch.id} 
-                            onClick={() => handleOpenChapter(ms.id, ch.id)}
+                            role="button" tabIndex={0} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleOpenChapter(ms.id, ch.id); } }} onClick={() => handleOpenChapter(ms.id, ch.id)}
                             className="flex items-center justify-between py-3 relative group cursor-pointer"
                           >
                             <div className="absolute -left-6 top-1/2 w-6 h-px bg-starlight-white/10" />

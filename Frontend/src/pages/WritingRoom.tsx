@@ -7,21 +7,25 @@ import { getProposals } from '../api/proposals';
 import type { ProposalsResponse } from '../api/proposals';
 import { ProposalReviewModal } from '../components/ProposalReviewModal';
 import { ChapterSelectionActions } from '../components/ChapterSelectionActions';
+import { Dialog } from '../components/Dialog';
+import { getChapterVersions, getChapterVersion, type ChapterVersion, type ChapterVersionContent } from '../api/chapters';
+import { getJobStatus, cancelJob } from '../api/jobs';
 
 export const WritingRoom: React.FC = () => {
   const navigate = useNavigate();
   const { worldId, manuscriptId } = useParams<{ worldId: string; manuscriptId: string }>();
-  
-  const { 
-    manuscripts, 
+
+  const {
+    manuscripts,
     activeManuscriptId,
     activeChapterId,
-    setActiveChapter, 
+    setActiveChapter,
     entities,
     setActiveEntity,
     updateChapterContent,
     fetchManuscriptsForWorld,
-    deleteChapter
+    deleteChapter,
+    fetchEntitiesForWorld
   } = useWorldStore();
 
   const currentWorldId = worldId;
@@ -53,26 +57,71 @@ export const WritingRoom: React.FC = () => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionStatus, setExtractionStatus] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const [historyVersions, setHistoryVersions] = useState<any[]>([]);
+  const [historyVersions, setHistoryVersions] = useState<ChapterVersion[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState<ChapterVersionContent | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [extractionJobId, setExtractionJobId] = useState<string | null>(null);
+  const [chaptersOpen, setChaptersOpen] = useState(() => window.innerWidth >= 768);
+  const [passageOpen, setPassageOpen] = useState(() => window.innerWidth >= 1280);
+  const [focusMode, setFocusMode] = useState(false);
+  const dirty = useRef(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [review, setReview] = useState<ProposalsResponse | null>(null);
 
   useEffect(() => {
-    if (activeChapter) {
-      setEditorContent(activeChapter.content);
+    if (!activeChapter || !currentWorldId || !currentManuscriptId) return;
+    const controller = new AbortController();
+    dirty.current = false;
+    setEditorContent(activeChapter.content);
+    setSaveError(null);
+    apiFetch<{ content: string }>(`/worlds/${currentWorldId}/chapters/${activeChapter.id}`, { signal: controller.signal })
+      .then(data => {
+        if (controller.signal.aborted) return;
+        if (!dirty.current) setEditorContent(data.content ?? '');
+        updateChapterContent(currentManuscriptId, activeChapter.id, data.content ?? '');
+      }).catch(error => { if (!controller.signal.aborted) setSaveError(`Could not load chapter: ${error.message}`); });
+    return () => controller.abort();
+  }, [activeChapter?.id, currentWorldId, currentManuscriptId, updateChapterContent]);
 
-      if (currentWorldId) {
-        apiFetch<any>(`/worlds/${currentWorldId}/chapters/${activeChapter.id}`)
-          .then(data => {
-            if (data.content) {
-              setEditorContent(data.content);
-              updateChapterContent(currentManuscriptId, activeChapter.id, data.content);
-            }
-          })
-          .catch(() => {});
+  useEffect(() => {
+    if (currentWorldId) fetchEntitiesForWorld(currentWorldId);
+  }, [currentWorldId, fetchEntitiesForWorld]);
+
+  useEffect(() => {
+    if (!extractionJobId) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const status = await getJobStatus(extractionJobId, controller.signal);
+        if (controller.signal.aborted) return;
+        if (status.status === 'done') {
+          const found = await getProposals(extractionJobId);
+          if (controller.signal.aborted) return;
+          setReview(found);
+          setExtractionStatus(null);
+          setIsExtracting(false);
+          setExtractionJobId(null);
+          return;
+        }
+        if (status.status === 'failed' || status.status === 'cancelled') {
+          setExtractionStatus(status.status === 'cancelled' ? 'Extraction cancelled. Saved chapter versions have been kept.' : `Extraction failed: ${status.error_message || 'Unknown error'}`);
+          setIsExtracting(false);
+          setExtractionJobId(null);
+          return;
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setExtractionStatus(`Could not load extraction status or proposals. Retrying: ${error instanceof Error ? error.message : 'Connection error'}`);
       }
-    }
-  }, [activeChapterId, currentWorldId]);
+      timer = setTimeout(poll, 1500);
+    };
+    poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [extractionJobId]);
 
   useEffect(() => {
     if (linkedChapterId && activeChapter?.id === linkedChapterId) {
@@ -111,68 +160,37 @@ export const WritingRoom: React.FC = () => {
     }
   };
 
-  const handleSaveEdit = async () => {
-    if (!activeChapter || !manuscript) return;
-    
-    // Update local state first
-    updateChapterContent(manuscript.id, activeChapter.id, editorContent);
-    setIsEditing(false);
-
-    // Call API to trigger re-extraction if real world
-    if (currentWorldId) {
-      setIsExtracting(true);
-      setExtractionStatus('Re-extracting entities & facts...');
-      try {
-        const res = await apiFetch<any>(`/worlds/${currentWorldId}/chapters/${activeChapter.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            title: activeChapter.title,
-            content: editorContent
-          })
-        });
-
-        if (res.job_id) {
-          // Poll job status
-          const poll = setInterval(async () => {
-            try {
-              const statusData = await apiFetch<any>(`/jobs/${res.job_id}/status`);
-              if (statusData.status === 'done') {
-                clearInterval(poll);
-                setIsExtracting(false);
-                // Re-extraction proposes; nothing changes in the world until the author applies it (docs/api.md §17)
-                try {
-                  const found = await getProposals(res.job_id);
-                  setReview(found);
-                  setExtractionStatus(null);
-                } catch {
-                  setExtractionStatus('Extraction finished, but its proposals could not be loaded.');
-                  setTimeout(() => setExtractionStatus(null), 4000);
-                }
-              } else if (statusData.status === 'failed') {
-                clearInterval(poll);
-                setIsExtracting(false);
-                setExtractionStatus('Extraction failed: ' + (statusData.error_message || 'Error'));
-              }
-            } catch (_) {
-              clearInterval(poll);
-              setIsExtracting(false);
-            }
-          }, 1500);
-        } else {
-          setIsExtracting(false);
-          setExtractionStatus(null);
-        }
-      } catch (err: any) {
-        setIsExtracting(false);
-        console.error("Failed to update chapter via API", err);
+  const persistChapter = async (content: string, versionId?: string) => {
+    if (!activeChapter || !manuscript || !currentWorldId || isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+    setHistoryError(null);
+    try {
+      const path = `/worlds/${currentWorldId}/chapters/${activeChapter.id}`;
+      const res = await apiFetch<{ job_id?: string }>(versionId ? `${path}/versions/${versionId}/restore` : path, {
+        method: versionId ? 'POST' : 'PUT',
+        ...(versionId ? {} : { body: JSON.stringify({ title: activeChapter.title, content }) }),
+      });
+      const confirmed = await apiFetch<{ content: string }>(path);
+      if (confirmed.content !== content) throw new Error('The backend did not confirm this chapter text. Your draft has been kept.');
+      updateChapterContent(manuscript.id, activeChapter.id, confirmed.content);
+      setEditorContent(confirmed.content);
+      dirty.current = false;
+      setIsEditing(false);
+      setShowHistory(false);
+      if (res.job_id) {
+        setIsExtracting(true);
+        setExtractionStatus('Chapter saved. Re-extracting proposed changes…');
+        setExtractionJobId(res.job_id);
       }
-    }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not confirm the saved chapter.';
+      if (versionId) setHistoryError(message);
+      else { setSaveError(message); setIsEditing(true); }
+    } finally { setIsSaving(false); }
   };
-
-  const handleRerunExtraction = async () => {
-    if (!activeChapter) return;
-    handleSaveEdit();
-  };
+  const handleSaveEdit = () => persistChapter(editorContent);
+  const handleRerunExtraction = () => persistChapter(isEditing ? editorContent : activeChapter?.content || '');
 
   const handleCreateChapter = async () => {
     const title = prompt('Enter new chapter title:');
@@ -208,7 +226,7 @@ export const WritingRoom: React.FC = () => {
 
       if (manuscript) {
         const updated = [...manuscript.chapters, newChapter];
-        const updatedManuscripts = manuscripts.map(m => 
+        const updatedManuscripts = manuscripts.map(m =>
           m.id === manuscript.id ? { ...m, chapters: updated } : m
         );
         useWorldStore.setState({ manuscripts: updatedManuscripts, activeChapterId: newChapter.id });
@@ -224,7 +242,7 @@ export const WritingRoom: React.FC = () => {
   const executeDeleteChapter = async () => {
     if (!deleteConfirmId) return;
     const chapterId = deleteConfirmId;
-    
+
     if (currentWorldId) {
       try {
         await apiFetch(`/worlds/${currentWorldId}/chapters/${chapterId}`, {
@@ -251,15 +269,22 @@ export const WritingRoom: React.FC = () => {
 
   const handleViewHistory = async () => {
     if (!activeChapter || !currentWorldId) return;
-    try {
-      const versions = await apiFetch<any[]>(`/worlds/${currentWorldId}/chapters/${activeChapter.id}/versions`);
-      setHistoryVersions(versions);
-      setShowHistory(true);
-    } catch (err: any) {
-      alert('Failed to load history: ' + err.message);
-    }
+    setShowHistory(true);
+    setSelectedVersion(null);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    try { setHistoryVersions(await getChapterVersions(currentWorldId, activeChapter.id)); }
+    catch (error) { setHistoryError(error instanceof Error ? error.message : 'Could not load history.'); }
+    finally { setHistoryLoading(false); }
   };
-
+  const inspectVersion = async (version: ChapterVersion) => {
+    if (!currentWorldId || !activeChapter) return;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try { setSelectedVersion(await getChapterVersion(currentWorldId, activeChapter.id, version.id)); }
+    catch (error) { setHistoryError(error instanceof Error ? error.message : 'Could not load version text.'); }
+    finally { setHistoryLoading(false); }
+  };
 
   // Helper to split text by entity names and inject interactive highlight tags
   const renderTextWithHighlights = (text: string) => {
@@ -275,7 +300,7 @@ export const WritingRoom: React.FC = () => {
 
     if (sortedEntityNames.length === 0) return <span>{text}</span>;
 
-    const escapedNames = sortedEntityNames.map(name => 
+    const escapedNames = sortedEntityNames.map(name =>
       name.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
     );
 
@@ -292,8 +317,8 @@ export const WritingRoom: React.FC = () => {
 
           if (matchedEntity) {
             return (
-              <span 
-                key={index} 
+              <span
+                key={index}
                 className="entity-highlight text-starlight-white font-medium cursor-pointer hover:underline"
                 title={`${matchedEntity.type.toUpperCase()}: Click to view profile`}
                 onClick={(e) => {
@@ -315,14 +340,14 @@ export const WritingRoom: React.FC = () => {
   return (
     <AppShell>
       {/* Editor Main Section */}
-      <main className="flex-1 flex h-full bg-[#09090b] relative overflow-hidden select-text">
-        
+      <main className="writing-layout">
+
         {/* Left internal sidebar: Chapters List */}
-        <aside className="w-72 border-r border-starlight-white/5 bg-surface-container-lowest flex flex-col shrink-0 select-none">
+        {chaptersOpen && <aside aria-label="Chapter index" className="writing-chapters">
           <div className="p-4 border-b border-starlight-white/5 flex items-center justify-between bg-gradient-to-b from-surface-container-highest/20 to-transparent">
-            <h2 className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest text-[10px]">Chapters</h2>
-            <button 
-              onClick={handleCreateChapter}
+            <h2 className="font-headline-md text-xl text-on-surface">Codex Folio</h2><button aria-label="Close chapter index" className="text-on-surface-variant md:hidden" onClick={() => setChaptersOpen(false)}><span className="material-symbols-outlined text-base">close</span></button>
+            <button
+              aria-label="Create chapter" onClick={handleCreateChapter}
               className="text-on-surface-variant/65 hover:text-primary transition-colors p-1"
             >
               <span className="material-symbols-outlined text-sm font-light">add</span>
@@ -333,15 +358,18 @@ export const WritingRoom: React.FC = () => {
             {manuscript?.chapters.map((ch) => {
               const isActive = ch.id === (activeChapterId || activeChapter?.id);
               return (
-                <div 
+                <div
                   key={ch.id}
                   onClick={() => {
+                    if (isSaving) return;
+                    if (isEditing && dirty.current && !window.confirm('Discard the unsaved changes in this chapter?')) return;
                     setActiveChapter(ch.id);
                     setIsEditing(false);
+                    if (window.innerWidth < 768) setChaptersOpen(false);
                   }}
                   className={`group px-4 py-3 rounded-lg relative overflow-hidden cursor-pointer transition-all duration-300 border ${
-                    isActive 
-                      ? 'bg-surface-container-low border-starlight-white/10 text-starlight-white' 
+                    isActive
+                      ? 'bg-surface-container-low border-starlight-white/10 text-starlight-white'
                       : 'border-transparent text-on-surface-variant/75 hover:bg-surface-container-lowest/50 hover:text-on-surface'
                   }`}
                 >
@@ -353,7 +381,7 @@ export const WritingRoom: React.FC = () => {
                   )}
                   <div className={`font-label-sm text-[10px] uppercase tracking-wider mb-1 flex justify-between items-center ${isActive ? 'text-primary' : 'text-on-surface-variant/40'}`}>
                     <span>Chapter {ch.number}</span>
-                    <button 
+                    <button
                       onClick={(e) => handleDeleteChapter(e, ch.id)}
                       className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400"
                       title="Delete Chapter"
@@ -366,43 +394,44 @@ export const WritingRoom: React.FC = () => {
               );
             })}
           </div>
-        </aside>
+        </aside>}
 
         {/* Right main panel: Editor Canvas */}
         <section className="flex-1 flex flex-col relative overflow-hidden">
-          
+
 
 
           {/* Action Bar */}
-          <div className="h-16 flex items-center justify-between px-8 border-b border-starlight-white/5 bg-surface-container-lowest/60 backdrop-blur-sm z-20 select-none">
-            <div className="flex items-center gap-3">
+          <div className="writing-toolbar">
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="studio-secondary" aria-label="Toggle chapters" aria-expanded={chaptersOpen} onClick={() => setChaptersOpen(value => !value)}><span className="material-symbols-outlined text-base">menu_book</span></button>
               {isEditing ? (
                 <>
-                  <button 
-                    onClick={handleSaveEdit}
+                  <button
+                    disabled={isSaving} onClick={handleSaveEdit}
                     className="px-5 py-1.5 rounded-full bg-primary hover:bg-copper-glow text-void-black font-label-sm text-xs font-semibold uppercase tracking-widest transition-all duration-300 shadow-md"
                   >
-                    Save Changes
+                    {isSaving ? 'Saving…' : 'Save Changes'}
                   </button>
-                  <button 
-                    onClick={handleCancelEdit}
+                  <button
+                    disabled={isSaving} onClick={handleCancelEdit}
                     className="px-4 py-1.5 rounded-full border border-starlight-white/10 text-on-surface-variant/80 hover:text-starlight-white hover:border-starlight-white/30 font-label-sm text-xs font-semibold uppercase tracking-widest transition-all duration-300"
                   >
                     Cancel
                   </button>
                 </>
               ) : (
-                <button 
-                  onClick={handleStartEdit}
+                <button
+                  disabled={isSaving} onClick={handleStartEdit}
                   className="px-5 py-1.5 rounded-full border border-copper-glow/50 text-copper-glow font-label-sm text-xs font-semibold uppercase tracking-widest hover:bg-copper-glow hover:text-void-black transition-all duration-300"
                 >
                   Edit Text
                 </button>
               )}
 
-              <button 
+              <button
                 onClick={handleRerunExtraction}
-                disabled={isExtracting}
+                disabled={isExtracting || isSaving}
                 className="px-4 py-1.5 rounded-full text-on-surface-variant/80 font-label-sm text-xs uppercase tracking-wider hover:text-primary hover:bg-primary/5 transition-all flex items-center gap-2 disabled:opacity-50"
               >
                 <span className={`material-symbols-outlined text-[16px] font-light ${isExtracting ? 'animate-spin' : ''}`}>
@@ -412,8 +441,8 @@ export const WritingRoom: React.FC = () => {
               </button>
 
               {!isEditing && (
-                <button 
-                  onClick={handleViewHistory}
+                <button
+                  aria-label="History" onClick={handleViewHistory}
                   className="px-4 py-1.5 rounded-full text-on-surface-variant/80 font-label-sm text-xs uppercase tracking-wider hover:text-primary hover:bg-primary/5 transition-all flex items-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[16px] font-light">history</span>
@@ -422,18 +451,21 @@ export const WritingRoom: React.FC = () => {
               )}
             </div>
 
-            <div className="flex items-center gap-4 text-on-surface-variant/40 font-label-sm text-[10px] uppercase tracking-wider">
+            <div className="flex flex-wrap items-center gap-3 text-on-surface-variant/60 text-[10px]">
+              <button className="hover:text-primary" aria-pressed={focusMode} onClick={() => { setFocusMode(value => !value); setChaptersOpen(focusMode); setPassageOpen(focusMode); }}>Sanctuary Focus</button>
+              <button className="hover:text-primary" aria-expanded={passageOpen} onClick={() => setPassageOpen(value => !value)}>Astrolabe</button>
               <span>Words: {activeChapter?.wordCount.toLocaleString()}</span>
               <span>•</span>
-              <span>{isExtracting ? 'Re-extracting' : 'Synced'}</span>
+              <span>{isSaving ? 'Saving' : isEditing ? 'Unsaved draft' : isExtracting ? 'Re-extracting' : 'Saved'}</span>
             </div>
           </div>
 
+          {saveError && <p role="alert" className="border-b border-error/20 bg-error/5 px-6 py-3 text-sm text-error">{saveError}</p>}
           {/* Reading/Editing Area */}
           {currentWorldId && activeChapter && <ChapterSelectionActions key={`${currentWorldId}:${activeChapter.id}`} worldId={currentWorldId} chapterId={activeChapter.id} readingRef={readingRef} textareaRef={textareaRef} isEditing={isEditing} />}
-          <div className="flex-1 overflow-y-auto px-8 md:px-24 py-16">
+          <div className="writing-paper">
             <article className="max-w-3xl mx-auto pb-48">
-              
+
               {/* Header Title */}
               <header className="mb-12 select-none">
                 <span className="font-label-sm text-[10px] text-primary uppercase tracking-[0.2em] mb-3 block">
@@ -447,21 +479,22 @@ export const WritingRoom: React.FC = () => {
 
               {/* Editable Textbox or Formatted View */}
               {isEditing ? (
-                <textarea 
-                  ref={textareaRef}
+                <textarea
+                  aria-label="Chapter text" disabled={isSaving} ref={textareaRef}
                   value={editorContent}
                   onChange={(e) => {
+                    dirty.current = true;
                     setEditorContent(e.target.value);
                     adjustTextareaHeight();
                   }}
                   className="w-full bg-transparent border-0 text-body-lg text-on-surface-variant leading-relaxed focus:ring-0 focus:outline-none resize-none overflow-hidden"
-                  style={{ fontFamily: 'Source Serif 4, serif', fontSize: '18px', lineHeight: '28px' }}
+
                 />
               ) : (
-                <div 
+                <div
                   ref={readingRef}
                   className="prose prose-invert prose-lg font-body-lg text-body-lg text-on-surface-variant leading-relaxed space-y-8 select-text"
-                  style={{ fontFamily: 'Source Serif 4, serif', fontSize: '18px', lineHeight: '28px' }}
+
                 >
                   {(() => {
                     const cited = activeChapter && activeChapter.id === linkedChapterId && linkEnd > linkStart
@@ -492,36 +525,22 @@ export const WritingRoom: React.FC = () => {
           </div>
 
         </section>
-
+        {passageOpen && <aside aria-label="Passage astrolabe" className="absolute inset-y-0 right-0 z-30 w-72 max-w-[90vw] overflow-y-auto border-l border-white/5 bg-surface-container-lowest p-5 xl:static xl:shrink-0">
+          <div className="mb-6 flex items-center justify-between"><span className="studio-eyebrow mb-0">Passage Astrolabe</span><button aria-label="Close passage astrolabe" onClick={() => setPassageOpen(false)}><span className="material-symbols-outlined text-base">close</span></button></div>
+          <p className="mb-5 text-xs text-on-surface-variant/60">Entities named in this chapter</p>
+          {entities.filter(entity => activeChapter?.content.toLowerCase().includes(entity.name.toLowerCase())).map(entity => <button key={entity.id} onClick={() => setActiveEntity(entity.id)} className="mb-3 block w-full rounded border border-white/5 bg-surface-container p-4 text-left hover:border-primary/30"><span className="text-[10px] uppercase tracking-widest text-primary">{entity.type}</span><span className="mt-2 block font-headline-md text-xl">{entity.name}</span><span className="mt-2 line-clamp-3 block text-xs leading-relaxed text-on-surface-variant/70">{entity.description || 'Open the codex to inspect facts and relationships.'}</span></button>)}
+          <button className="studio-secondary mt-5 w-full" onClick={() => navigate(`/worlds/${currentWorldId}/assistant`)}><span className="material-symbols-outlined text-base">forum</span>Character dialogue</button>
+        </aside>}
       </main>
 
-      {/* History Modal */}
-      {showHistory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void-black/80 backdrop-blur-sm">
-          <div className="bg-surface-container-high border border-starlight-white/10 rounded-lg shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col">
-            <div className="p-6 border-b border-starlight-white/5 flex justify-between items-center">
-              <h2 className="font-headline-md text-starlight-white">Chapter History</h2>
-              <button onClick={() => setShowHistory(false)} className="text-on-surface-variant/60 hover:text-primary">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {historyVersions.length === 0 ? (
-                <p className="text-on-surface-variant/60 text-sm">No history available.</p>
-              ) : (
-                historyVersions.map((v: any) => (
-                  <div key={v.id} className="p-4 rounded border border-starlight-white/5 bg-surface-container-low flex justify-between items-center">
-                    <div>
-                      <h3 className="text-starlight-white text-sm font-medium">Version {v.version_number} {v.is_current ? '(Current)' : ''}</h3>
-                      <p className="text-on-surface-variant/60 text-xs mt-1">Saved: {new Date(v.created_at).toLocaleString()}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {showHistory && <Dialog title="Chapter History" onClose={() => { if (!isSaving) setShowHistory(false); }}>
+        <p className="mb-5 text-sm leading-relaxed text-on-surface-variant/70">Inspect a saved version, then restore it as a new version. Existing history stays intact; extracted changes still need your review.</p>
+        {historyError && <p role="alert" className="mb-4 text-sm text-error">{historyError}</p>}
+        {historyLoading && <p role="status" className="mb-3 text-sm text-on-surface-variant">Loading version…</p>}
+        {!historyLoading && historyVersions.length === 0 && <p>No history available.</p>}
+        <div className="space-y-2">{historyVersions.map(version => <button disabled={isSaving || historyLoading} key={version.id} onClick={() => inspectVersion(version)} className="studio-secondary flex w-full justify-between text-left"><span>Version {version.version_number} {version.is_current ? '(Current)' : ''}</span><span className="text-[11px] text-on-surface-variant/60">{new Date(version.created_at).toLocaleString()}</span></button>)}</div>
+        {selectedVersion && <section className="mt-6 border-t border-white/10 pt-5"><h3 className="mb-3 font-headline-md text-xl">Version {selectedVersion.version_number} text</h3><pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded bg-surface-container-lowest p-4 font-body-lg text-lg leading-relaxed text-on-surface-variant">{selectedVersion.content}</pre><button disabled={isSaving || selectedVersion.is_current || historyLoading} className="studio-primary mt-5" onClick={() => persistChapter(selectedVersion.content, selectedVersion.id)}>{isSaving ? 'Restoring…' : `Restore Version ${selectedVersion.version_number}`}</button></section>}
+      </Dialog>}
 
       {review && (
         <ProposalReviewModal
@@ -540,13 +559,14 @@ export const WritingRoom: React.FC = () => {
       )}
 
       {/* Floating Extraction Toast */}
-      <div 
+      <div
         className={`fixed bottom-8 right-8 z-50 flex items-center gap-3 px-5 py-3 rounded-xl bg-surface-container-high/90 backdrop-blur-md border border-primary/30 shadow-[0_8px_32px_rgba(235,166,134,0.15)] transition-all duration-500 transform ${
           extractionStatus ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'
         }`}
       >
-        <span className="material-symbols-outlined text-primary text-xl animate-spin">refresh</span>
-        <span className="font-label-sm text-sm text-starlight-white tracking-wide">{extractionStatus}</span>
+<span className={`material-symbols-outlined text-primary text-xl ${isExtracting ? 'animate-spin' : ''}`}>{isExtracting ? 'refresh' : 'info'}</span>
+        <span role={extractionStatus ? 'status' : undefined} className="max-w-lg text-sm text-starlight-white">{extractionStatus}</span>
+        {extractionJobId ? <button className="shrink-0 text-xs text-primary" onClick={() => cancelJob(extractionJobId).catch(error => setSaveError(error.message))}>Cancel extraction</button> : <button aria-label="Dismiss extraction status" onClick={() => setExtractionStatus(null)}><span className="material-symbols-outlined text-base">close</span></button>}
       </div>
 
       {/* Delete Confirmation Modal */}

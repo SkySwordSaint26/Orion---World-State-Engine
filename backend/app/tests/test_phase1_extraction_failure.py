@@ -1,5 +1,6 @@
 """Phase 1A: a failed extraction run must fail the extraction run and job, and write no world state."""
-import subprocess
+from contextlib import nullcontext
+from types import SimpleNamespace
 
 from app.pipeline import extractor
 
@@ -9,8 +10,8 @@ ZERO = {"entities": 0, "aliases": 0, "mentions": 0, "facts": 0, "fact_versions":
 
 def test_extractor_failure_fails_run_and_job_and_writes_no_world_state(phase1_env, monkeypatch):
     env = phase1_env
-    monkeypatch.setattr(extractor.subprocess, "run",
-                        lambda args, **kw: subprocess.CompletedProcess(args, 1, "", "CUDA out of memory"))
+    monkeypatch.setattr(extractor.subprocess, "Popen", lambda *args, **kw: nullcontext(
+        SimpleNamespace(returncode=1, communicate=lambda **kw: ("", "CUDA out of memory"))))
     data = env.make_world("A", chapters=1)
 
     result = env.execute(data["world_id"], data["job_id"], data["runs"][1])

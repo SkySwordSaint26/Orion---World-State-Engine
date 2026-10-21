@@ -14,6 +14,7 @@ from app.utils.file_handler import save_file_content
 from app.utils.hashing import compute_file_sha256
 from app.utils.text_splitter import split_into_chapters
 from app.config.logging import get_logger
+from fastapi import HTTPException
 
 logger = get_logger(__name__)
 
@@ -39,6 +40,8 @@ class ManuscriptService:
         3. Creates Manuscript, Chapter, and ChapterVersion records.
         4. Initializes parent ProcessingJob and child ExtractionRuns.
         """
+        if filename.lower().endswith(".epub"):
+            raise HTTPException(status_code=415, detail="EPUB is not supported. Upload TXT, Markdown, DOCX or PDF.")
         # Save physical file
         saved_path = save_file_content(file_bytes, filename, subfolder=f"worlds/{world_id}")
         

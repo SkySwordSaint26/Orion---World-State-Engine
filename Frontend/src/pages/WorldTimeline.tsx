@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { AppShell } from '../components/AppShell';
+import { Dialog } from '../components/Dialog';
 import { useWorldStore } from '../store/useWorldStore';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../api/client';
@@ -42,11 +43,12 @@ export const WorldTimeline: React.FC = () => {
     setActiveManuscript,
     setActiveChapter,
     manuscripts,
+    fetchManuscriptsForWorld,
   } = useWorldStore();
 
   const [events, setEvents] = useState<EventResponse[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(true);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(() => window.innerWidth >= 1024);
   const [collapsedChapters, setCollapsedChapters] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,13 +122,14 @@ export const WorldTimeline: React.FC = () => {
     const entityRequestId = ++entityRequestRef.current;
     if (activeWorldId) {
       loadTimeline(activeWorldId, timelineRequestId);
+      fetchManuscriptsForWorld(activeWorldId);
       apiFetch<any[]>(`/worlds/${activeWorldId}/entities`)
         .then((data) => {
           if (entityRequestId === entityRequestRef.current) setAvailableEntities(data || []);
         })
-        .catch((err) => console.error('Failed to load entities:', err));
+        .catch((err) => { if (entityRequestId === entityRequestRef.current) setError(err.message || 'Could not load participants.'); });
     }
-  }, [activeWorldId]);
+  }, [activeWorldId, fetchManuscriptsForWorld]);
 
   // Derive per-character narrative statistics from all timeline events
   const timelineCharacters = useMemo(() => {
@@ -294,6 +297,7 @@ export const WorldTimeline: React.FC = () => {
     if (!activeWorldId || !newDescription.trim()) return;
 
     setCreating(true);
+    setError(null);
     try {
       const participantsPayload: EventParticipantInput[] = modalParticipants.map((p) => ({
         entity_id: p.entity_id,
@@ -326,6 +330,7 @@ export const WorldTimeline: React.FC = () => {
     if (!activeWorldId || !selectedEventId || !editDescription.trim()) return;
 
     setUpdating(true);
+    setError(null);
     try {
       const participantsPayload: EventParticipantInput[] = modalParticipants.map((p) => ({
         entity_id: p.entity_id,
@@ -423,16 +428,16 @@ export const WorldTimeline: React.FC = () => {
 
       <header className="absolute inset-x-0 top-0 h-14 bg-surface-dim/85 backdrop-blur-md border-b border-starlight-white/5 z-40 flex items-center justify-between px-6 pointer-events-none">
         <div className="flex items-center gap-4">
-          <span className="font-headline-md text-headline-md text-primary">World Timeline</span>
+          <span className="font-headline-md text-xl text-primary whitespace-nowrap">World Timeline</span>
           <span className="text-on-surface-variant/50">/</span>
-          <span className="font-label-sm uppercase tracking-widest text-on-surface-variant/70">Chronicle sequence</span>
+          <span className="hidden sm:inline text-xs uppercase tracking-widest text-on-surface-variant/60">Chronicle sequence</span>
         </div>
         <span className="font-label-sm uppercase tracking-widest text-on-surface-variant/60">{displayedEvents.length} events</span>
       </header>
 
-      <main className="flex-1 h-screen pt-14 flex relative overflow-hidden select-none">
+      <main className="flex-1 h-full min-w-0 pt-14 flex relative overflow-hidden select-none">
         {/* Timeline Canvas (Scrollable) */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth px-8 py-10 scrollbar-hide">
+        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth px-5 md:px-8 py-8">
           <div className="max-w-6xl mx-auto relative min-h-full pb-32 pt-4 flex gap-6">
             {/* Archive index */}
             <aside className="hidden lg:block w-44 shrink-0 sticky top-4 self-start pt-2">
@@ -485,10 +490,10 @@ export const WorldTimeline: React.FC = () => {
               <div>
                 <div className="flex items-center gap-3 mb-1.5">
                   <span className="material-symbols-outlined text-copper-glow text-2xl font-light">timeline</span>
-                  <h1 className="font-display-lg text-display-lg text-starlight-white">Chronicle Timeline</h1>
+                  <h1 className="font-display-lg text-display-lg text-starlight-white">The Deep Tapestry of Time</h1>
                 </div>
                 <p className="font-body-lg text-body-lg text-on-surface-variant/80 leading-relaxed max-w-xl text-sm">
-                  Track how world milestones, character arcs, and narrative tension unfold across chapters.
+                  Follow world milestones and character journeys through the manuscript. Ordered by chapter and narrative sequence.
                 </p>
               </div>
 
@@ -503,7 +508,7 @@ export const WorldTimeline: React.FC = () => {
                     placeholder="Search events, characters..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-52 bg-surface-container-high/60 border border-outline-variant/30 rounded-lg pl-9 pr-3 py-1.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary/50 transition-all"
+                    aria-label="Search timeline" className="w-full sm:w-52 bg-surface-container-high/60 border border-outline-variant/30 rounded-lg pl-9 pr-3 py-1.5 text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary/50 transition-all"
                   />
                   {searchQuery && (
                     <button
@@ -894,7 +899,7 @@ export const WorldTimeline: React.FC = () => {
 
         {/* Dynamic World State Changes wing inside the main stage (Right side wing) */}
         {isDetailsOpen ? (
-        <aside className="w-side-panel-width max-w-[min(360px,38vw)] max-lg:absolute max-lg:right-0 max-lg:top-0 max-lg:bottom-0 max-lg:w-[min(360px,calc(100vw-24px))] max-lg:max-w-none bg-surface-container-low/95 border-l border-starlight-white/10 flex flex-col h-full shrink-0 z-20">
+        <aside className="timeline-details flex h-full flex-col z-20">
           {/* Header */}
           <div className="p-6 border-b border-starlight-white/5 bg-gradient-to-b from-surface-container-highest/20 to-transparent pt-14">
             <span className="font-label-sm text-[10px] text-primary/70 block mb-1 tracking-wider uppercase font-semibold">
@@ -1071,16 +1076,9 @@ export const WorldTimeline: React.FC = () => {
         )}
       </main>
 
-      {/* Create Event Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-surface-container border border-starlight-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl overflow-y-auto max-h-[90vh]">
-            <h2 className="text-lg font-bold text-starlight-white mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">add_circle</span>
-              Add Chronicle Event
-            </h2>
-
+      {isModalOpen && <Dialog title="Add Chronicle Event" onClose={() => { if (!creating) setIsModalOpen(false); }}>
             <form onSubmit={handleCreateEvent} className="space-y-4">
+              {error && <p role="alert" className="text-sm text-error">{error}</p>}
               <div>
                 <label className="block text-xs font-medium text-on-surface-variant mb-1 uppercase tracking-wider">
                   Description *
@@ -1088,7 +1086,7 @@ export const WorldTimeline: React.FC = () => {
                 <textarea
                   rows={3}
                   required
-                  value={newDescription}
+                  aria-label="Event description" value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder="Describe what occurs at this milestone..."
                   className="w-full rounded-lg bg-surface-container-high border border-starlight-white/10 px-3 py-2 text-sm text-starlight-white focus:outline-none focus:border-primary/50"
@@ -1102,7 +1100,7 @@ export const WorldTimeline: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={newEventType}
+                    aria-label="Event type" value={newEventType}
                     onChange={(e) => setNewEventType(e.target.value)}
                     placeholder="e.g. BATTLE, ARRIVAL, DISCOVERY"
                     className="w-full rounded-lg bg-surface-container-high border border-starlight-white/10 px-3 py-2 text-sm text-starlight-white focus:outline-none focus:border-primary/50"
@@ -1114,7 +1112,7 @@ export const WorldTimeline: React.FC = () => {
                     Chapter
                   </label>
                   <select
-                    value={newChapterId}
+                    aria-label="Event chapter" value={newChapterId}
                     onChange={(e) => setNewChapterId(e.target.value)}
                     className="w-full rounded-lg bg-surface-container-high border border-starlight-white/10 px-3 py-2 text-sm text-starlight-white focus:outline-none focus:border-primary/50"
                   >
@@ -1165,7 +1163,7 @@ export const WorldTimeline: React.FC = () => {
                 {/* Add Participant Row */}
                 <div className="flex items-center gap-2">
                   <select
-                    value={modalSelectedEntityId}
+                    aria-label="Event participant" value={modalSelectedEntityId}
                     onChange={(e) => setModalSelectedEntityId(e.target.value)}
                     className="flex-1 rounded-lg bg-surface-container-high border border-starlight-white/10 px-2.5 py-1.5 text-xs text-starlight-white focus:outline-none focus:border-primary/50"
                   >
@@ -1182,7 +1180,7 @@ export const WorldTimeline: React.FC = () => {
                   <input
                     type="text"
                     list="role-options"
-                    value={modalRoleInput}
+                    aria-label="Participant role" value={modalRoleInput}
                     onChange={(e) => setModalRoleInput(e.target.value)}
                     placeholder="Role"
                     className="w-28 rounded-lg bg-surface-container-high border border-starlight-white/10 px-2.5 py-1.5 text-xs text-starlight-white focus:outline-none focus:border-primary/50 uppercase"
@@ -1221,20 +1219,11 @@ export const WorldTimeline: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Dialog>}
 
-      {/* Edit Event Modal (§15.3) */}
-      {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-surface-container border border-starlight-white/10 rounded-xl p-6 max-w-lg w-full shadow-2xl overflow-y-auto max-h-[90vh]">
-            <h2 className="text-lg font-bold text-starlight-white mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">edit</span>
-              Edit Chronicle Event
-            </h2>
-
+      {isEditModalOpen && <Dialog title="Edit Chronicle Event" onClose={() => { if (!updating) setIsEditModalOpen(false); }}>
             <form onSubmit={handleUpdateEvent} className="space-y-4">
+              {error && <p role="alert" className="text-sm text-error">{error}</p>}
               <div>
                 <label className="block text-xs font-medium text-on-surface-variant mb-1 uppercase tracking-wider">
                   Description *
@@ -1242,7 +1231,7 @@ export const WorldTimeline: React.FC = () => {
                 <textarea
                   rows={3}
                   required
-                  value={editDescription}
+                  aria-label="Event description" value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   placeholder="Describe what occurs at this milestone..."
                   className="w-full rounded-lg bg-surface-container-high border border-starlight-white/10 px-3 py-2 text-sm text-starlight-white focus:outline-none focus:border-primary/50"
@@ -1256,7 +1245,7 @@ export const WorldTimeline: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={editEventType}
+                    aria-label="Event type" value={editEventType}
                     onChange={(e) => setEditEventType(e.target.value)}
                     placeholder="e.g. BATTLE, ARRIVAL, MEETING"
                     className="w-full rounded-lg bg-surface-container-high border border-starlight-white/10 px-3 py-2 text-sm text-starlight-white focus:outline-none focus:border-primary/50"
@@ -1268,7 +1257,7 @@ export const WorldTimeline: React.FC = () => {
                     Chapter
                   </label>
                   <select
-                    value={editChapterId}
+                    aria-label="Event chapter" value={editChapterId}
                     onChange={(e) => setEditChapterId(e.target.value)}
                     className="w-full rounded-lg bg-surface-container-high border border-starlight-white/10 px-3 py-2 text-sm text-starlight-white focus:outline-none focus:border-primary/50"
                   >
@@ -1319,7 +1308,7 @@ export const WorldTimeline: React.FC = () => {
                 {/* Add Participant Row */}
                 <div className="flex items-center gap-2">
                   <select
-                    value={modalSelectedEntityId}
+                    aria-label="Event participant" value={modalSelectedEntityId}
                     onChange={(e) => setModalSelectedEntityId(e.target.value)}
                     className="flex-1 rounded-lg bg-surface-container-high border border-starlight-white/10 px-2.5 py-1.5 text-xs text-starlight-white focus:outline-none focus:border-primary/50"
                   >
@@ -1336,7 +1325,7 @@ export const WorldTimeline: React.FC = () => {
                   <input
                     type="text"
                     list="role-options-edit"
-                    value={modalRoleInput}
+                    aria-label="Participant role" value={modalRoleInput}
                     onChange={(e) => setModalRoleInput(e.target.value)}
                     placeholder="Role"
                     className="w-28 rounded-lg bg-surface-container-high border border-starlight-white/10 px-2.5 py-1.5 text-xs text-starlight-white focus:outline-none focus:border-primary/50 uppercase"
@@ -1375,9 +1364,7 @@ export const WorldTimeline: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Dialog>}
     </AppShell>
   );
 };

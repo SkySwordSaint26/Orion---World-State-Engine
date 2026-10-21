@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Dialog } from './Dialog';
 import { useNavigate } from 'react-router-dom';
 import { changePassword, getProfile, updateProfile } from '../api/account';
 import type { Profile } from '../api/account';
@@ -29,6 +30,8 @@ export const CreatorProfileModal: React.FC<{ onClose: () => void }> = ({ onClose
     try {
       const p = await updateProfile({ display_name: name });
       setProfile(p);
+      setName(p.display_name);
+      setError(null);
       setSaved('Saved');
       setTimeout(() => setSaved(null), 2000);
     } catch (e: any) {
@@ -58,26 +61,16 @@ export const CreatorProfileModal: React.FC<{ onClose: () => void }> = ({ onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void-black/80 backdrop-blur-sm select-text" onClick={onClose}>
-      <div className="bg-surface-container-high border border-primary/30 rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="p-6 border-b border-starlight-white/5 flex justify-between items-center">
-          <h2 className="font-headline-md text-starlight-white flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary">person_outline</span> Creator Profile
-          </h2>
-          <button onClick={onClose} className="text-on-surface-variant/60 hover:text-primary">
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-
+    <Dialog title="Creator Profile" onClose={onClose}>
         {error && <p className="px-6 pt-4 text-sm text-red-300">{error}</p>}
         {!profile && !error && <p className="p-6 text-sm text-on-surface-variant/60">Loading…</p>}
 
         {profile && (
-          <div className="p-6 space-y-6">
+          <div className="space-y-6">
             <section>
               <span className={label}>Pen name</span>
               <div className="flex gap-2">
-                <input className={field} value={name} placeholder="How you sign your work" onChange={(e) => setName(e.target.value)} />
+                <input aria-label="Pen name" className={field} value={name} placeholder="How you sign your work" onChange={(e) => setName(e.target.value)} />
                 <button onClick={saveName} className="px-4 rounded-lg text-sm bg-primary/20 text-primary border border-primary/50 hover:bg-primary hover:text-void-black transition-colors">
                   {saved ?? 'Save'}
                 </button>
@@ -127,7 +120,6 @@ export const CreatorProfileModal: React.FC<{ onClose: () => void }> = ({ onClose
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </Dialog>
   );
 };

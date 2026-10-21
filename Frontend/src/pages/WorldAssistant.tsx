@@ -51,7 +51,7 @@ export const WorldAssistant: React.FC = () => {
   };
 
   const handleSendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || isTyping) return;
 
     const userMsg: Message = {
       id: `msg-${Date.now()}`,
@@ -150,7 +150,7 @@ export const WorldAssistant: React.FC = () => {
     <AppShell>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(230,162,126,0.02),transparent_60%)] -z-10 pointer-events-none"></div>
 
-      <main className="flex-1 h-screen flex flex-col relative overflow-hidden bg-surface">
+      <main className="flex-1 h-full min-w-0 flex flex-col relative overflow-hidden bg-surface">
         
         {/* Assistant Header */}
         <header className="h-16 border-b border-starlight-white/5 bg-surface-container-lowest/50 backdrop-blur px-8 flex items-center justify-between z-10 select-none">
@@ -163,7 +163,7 @@ export const WorldAssistant: React.FC = () => {
                 {focus ? `Talking to ${focus.name}` : 'Orion Assistant'}
               </h2>
               <p className="text-[10px] font-label-sm text-on-surface-variant/45 uppercase tracking-wider mt-0.5">
-                {focus ? 'Character chat · answers from your world state' : 'Grounded Lore Engine AI'}
+                {focus ? 'Character chat · answers from your world state' : 'Character dialogue · Grounded in your accepted world state'}
               </p>
             </div>
           </div>
@@ -257,7 +257,7 @@ export const WorldAssistant: React.FC = () => {
                 {presetQueries.map((query, idx) => (
                   <button 
                     key={idx}
-                    onClick={() => handleSendMessage(query)}
+                    disabled={isTyping} onClick={() => handleSendMessage(query)}
                     className="px-3.5 py-1.5 rounded-full border border-starlight-white/10 bg-surface-container-low/20 hover:border-primary/50 text-xs text-on-surface-variant hover:text-primary transition-all font-label-sm uppercase tracking-wider text-[10px]"
                   >
                     {query}
@@ -281,7 +281,7 @@ export const WorldAssistant: React.FC = () => {
                 className="w-full bg-surface-container-lowest border border-starlight-white/10 rounded-full pl-6 pr-14 py-3 text-xs text-on-surface placeholder:text-on-surface-variant/30 focus:border-primary focus:ring-0 focus:outline-none"
               />
               <button 
-                type="submit"
+                type="submit" disabled={isTyping || !inputVal.trim()}
                 className="absolute right-2 w-9 h-9 rounded-full bg-primary hover:bg-copper-glow flex items-center justify-center text-void-black transition-colors"
                 title="Send query"
               >

@@ -1,245 +1,111 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useWorldStore } from '../store/useWorldStore';
-import { AnimatePresence, motion } from 'framer-motion';
+import { useAuthStore } from '../store/useAuthStore';
+import { apiFetch } from '../api/client';
 import { EntityPanel } from './EntityPanel';
 import { ErrorBoundary } from './ErrorBoundary';
 import { CreatorProfileModal } from './CreatorProfileModal';
 import { SettingsModal } from './SettingsModal';
 
-interface AppShellProps {
-  children: React.ReactNode;
-}
-
-export const AppShell: React.FC<AppShellProps> = ({ children }) => {
+export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { worldId, manuscriptId } = useParams<{ worldId: string; manuscriptId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  
-  const { 
-    activeEntityId, 
-    isEntityPanelOpen, 
-    setEntityPanelOpen,
-    setActiveWorld,
-    activeWorldId,
-    contradictions,
-    worlds,
-    manuscripts,
-    activeChapterId
-  } = useWorldStore();
+  const { activeEntityId, isEntityPanelOpen, setEntityPanelOpen, setActiveWorld, activeWorldId,
+    contradictions, worlds, manuscripts, activeChapterId, setWorlds } = useWorldStore();
+  const user = useAuthStore(state => state.user);
+  const [openPanel, setOpenPanel] = useState<'profile' | 'settings' | null>(null);
+  const [mobileNav, setMobileNav] = useState(false);
+  const [writeError, setWriteError] = useState<string | null>(null);
 
-  // The URL decides the world (a reload or a pasted link has no earlier selection in the store)
   useEffect(() => {
     if (worldId && worldId !== activeWorldId) setActiveWorld(worldId);
   }, [worldId, activeWorldId, setActiveWorld]);
+  useEffect(() => {
+    if (!worldId || worlds.some(world => world.id === worldId)) return;
+    let cancelled = false;
+    apiFetch<any>(`/worlds/${worldId}`).then(world => {
+      if (!cancelled) setWorlds([...useWorldStore.getState().worlds.filter(item => item.id !== world.id), {
+        id: world.id, name: world.name, description: world.description || '',
+        entityCount: world.stats?.entities_count || 0, manuscriptCount: world.stats?.manuscripts_count || 0,
+        characterCount: world.stats?.characters_count || 0, locationCount: world.stats?.locations_count || 0,
+        objectCount: world.stats?.objects_count || 0, eventCount: world.stats?.events_count || 0,
+      }]);
+    }).catch(error => { if (!cancelled) setWriteError(error.message); });
+    return () => { cancelled = true; };
+  }, [worldId, worlds, setWorlds]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setMobileNav(false); setEntityPanelOpen(false); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); };
+  }, [setEntityPanelOpen]);
 
-  const currentPath = location.pathname;
-  const currentWorldId = worldId;
-
-  // Count open contradictions to show a badge on the navigation rail (rejected ones don't count)
-  const unresolvedContradictionsCount = contradictions.filter(c => !c.resolved && c.status !== 'DISMISSED').length;
-  const [openPanel, setOpenPanel] = useState<'profile' | 'settings' | null>(null);
-
-  const navItems = [
-    {
-      path: `/worlds/${currentWorldId}`,
-      icon: 'home',
-      label: 'Home'
-    },
-    {
-      path: `/worlds/${currentWorldId}/manuscripts`,
-      icon: 'menu_book',
-      label: 'Manuscripts'
-    },
-    {
-      path: `/worlds/${currentWorldId}/world`,
-      icon: 'public',
-      label: 'World Ledger'
-    },
-    {
-      path: `/worlds/${currentWorldId}/graph`,
-      icon: 'bubble_chart',
-      label: 'Network Graph'
-    },
-    {
-      path: `/worlds/${currentWorldId}/timeline`,
-      icon: 'timeline',
-      label: 'Timeline'
-    },
-    {
-      path: `/worlds/${currentWorldId}/contradictions`,
-      icon: 'rule',
-      label: 'Contradictions',
-      badge: unresolvedContradictionsCount > 0 ? unresolvedContradictionsCount : undefined
-    },
-    {
-      path: `/worlds/${currentWorldId}/assistant`,
-      icon: 'chat_bubble_outline',
-      label: 'AI Assistant'
-    },
+  const unresolved = contradictions.filter(item => !item.resolved && item.status !== 'DISMISSED').length;
+  const navItems = worldId ? [
+    { path: `/worlds/${worldId}`, icon: 'home', label: 'Home' },
+    { path: `/worlds/${worldId}/manuscripts`, icon: 'history_edu', label: 'Manuscripts' },
+    { path: `/worlds/${worldId}/world`, icon: 'public', label: 'World Ledger' },
+    { path: `/worlds/${worldId}/graph`, icon: 'hub', label: 'Network Graph' },
+    { path: `/worlds/${worldId}/timeline`, icon: 'hourglass_empty', label: 'Timeline' },
+    { path: `/worlds/${worldId}/contradictions`, icon: 'balance', label: 'Contradictions', badge: unresolved },
+    { path: `/worlds/${worldId}/assistant`, icon: 'forum', label: 'AI Assistant' },
+  ] : [
+    { path: '/worlds', icon: 'public', label: 'Worlds' },
+    { path: '/worlds/new', icon: 'add', label: 'New World' },
   ];
-
-  const activeNavItem = navItems.find(item => currentPath === item.path ||
-    (item.label === 'Manuscripts' && currentPath.startsWith(`${item.path}/`)));
+  const activeItem = navItems.find(item => location.pathname === item.path ||
+    (item.label === 'Manuscripts' && location.pathname.startsWith(`${item.path}/`)));
   const manuscript = manuscripts.find(item => item.id === manuscriptId);
   const chapter = manuscript?.chapters.find(item => item.id === activeChapterId) || manuscript?.chapters[0];
-  const pageTitle = manuscriptId ? 'Chapter Editor' : currentPath.endsWith('/processing') ? 'Processing World' : activeNavItem?.label || 'World';
-  const worldName = worlds.find(item => item.id === worldId)?.name || 'World';
-
-  useEffect(() => {
-    document.title = `${pageTitle} · ${worldName} · Orion`;
-  }, [pageTitle, worldName]);
-
-  if (!worldId) return null;
-
-  const handleReturnToArchive = () => {
-    setActiveWorld(null);
-    navigate('/worlds');
-  };
+  const pageTitle = manuscriptId ? 'Chapter Editor' : location.pathname.endsWith('/processing') ? 'Processing World' : activeItem?.label || 'Worlds';
+  const worldName = worlds.find(item => item.id === worldId)?.name || 'Your world';
+  useEffect(() => { document.title = `${pageTitle}${worldId ? ` · ${worldName}` : ''} · Orion`; }, [pageTitle, worldId, worldName]);
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-void-black text-on-surface select-none">
-      
-      {/* Labeled navigation stays visible on every world page. */}
-      <nav aria-label="World navigation" className="fixed left-0 top-0 h-full w-[104px] bg-void-black border-r border-starlight-white/10 z-50 flex flex-col items-center py-4 justify-between select-none overflow-y-auto">
-        
-        {/* Brand/Logo Constellation Icon */}
-        <div className="flex flex-col items-center gap-1 group cursor-pointer" onClick={handleReturnToArchive} title="Return to Archive">
-          <div className="w-10 h-10 rounded-full border border-primary/30 flex items-center justify-center bg-surface-container overflow-hidden relative group-hover:border-primary transition-all duration-300">
-            <span className="material-symbols-outlined text-primary text-2xl group-hover:scale-110 transition-transform font-extralight">bubble_chart</span>
-          </div>
-          <span className="font-label-sm text-[9px] text-on-surface-variant/40 uppercase tracking-wider group-hover:text-primary transition-colors">Orion</span>
-        </div>
-
-        {/* Primary Navigation Tabs */}
-        <div className="flex-1 w-full flex flex-col gap-2 mt-8">
-          {navItems.map((item) => {
-            const isActive = currentPath === item.path || (item.path.includes('/manuscripts') && currentPath.includes('/manuscripts'));
-            return (
-              <Link 
-                key={item.path} 
-                to={item.path}
-                aria-label={item.label}
-                aria-current={isActive ? 'page' : undefined}
-                className={`relative flex flex-col items-center justify-center py-4 transition-colors duration-300 w-full group ${
-                  isActive 
-                    ? 'text-primary bg-primary/5' 
-                    : 'text-on-surface-variant/60 hover:text-primary hover:bg-white/5'
-                }`}
-                title={item.label}
-              >
-                {/* Active Indicator bar */}
-                {isActive && (
-                  <span className="absolute left-0 h-8 w-[2px] bg-primary shadow-[0_0_12px_rgba(254,182,141,0.6)]" />
-                )}
-                
-                {/* Icon with hover scaling */}
-                <span className={`material-symbols-outlined text-[22px] transition-transform duration-300 ${isActive ? 'fill font-light' : 'font-light group-hover:scale-110'}`}>
-                  {item.icon}
-                </span>
-                <span className="text-[10px] leading-tight text-center mt-1 px-2">{item.label}</span>
-
-                {/* Optional Badge */}
-                {item.badge !== undefined && (
-                  <span className="absolute top-2 right-2 w-4 h-4 rounded-full bg-error text-void-black text-[9px] font-label-sm font-bold flex items-center justify-center border border-void-black shadow-[0_0_8px_rgba(255,180,171,0.5)]">
-                    {item.badge}
-                  </span>
-                )}
-                
-                {/* Tooltip on hover */}
-                <span className="opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 absolute left-full ml-4 bg-surface-container-high border border-starlight-white/10 px-3 py-1 rounded text-starlight-white text-xs font-label-sm pointer-events-none transition-all duration-200 z-50 whitespace-nowrap shadow-xl">
-                  {item.label}
-                </span>
-              </Link>
-            );
+    <div className="studio-shell">
+      {mobileNav && <button className="fixed inset-0 z-40 bg-black/70 md:hidden" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}
+      <nav id="studio-navigation" aria-label="World navigation" className={`studio-rail ${mobileNav ? 'is-open' : ''}`}>
+        <Link to="/worlds" aria-label="Return to Archive" className="studio-mark" onClick={() => { setActiveWorld(null); setMobileNav(false); }}><span className="material-symbols-outlined">auto_awesome</span><span className="rail-label">Orion</span></Link>
+        <div className="flex flex-1 flex-col gap-2 pt-8">
+          {navItems.map(item => {
+            const active = activeItem?.path === item.path;
+            return <Link key={item.path} to={item.path} title={item.label} aria-label={item.label} aria-current={active ? 'page' : undefined}
+              className={`studio-nav-link ${active ? 'is-active' : ''}`} onClick={() => setMobileNav(false)}>
+              <span className="material-symbols-outlined">{item.icon}</span><span className="rail-label">{item.label}</span>
+              {'badge' in item && !!item.badge && <span className="nav-badge">{item.badge}</span>}
+            </Link>;
           })}
         </div>
-
-        {/* Secondary Actions / Footer */}
-        <div className="w-full flex flex-col gap-1 border-t border-starlight-white/10 pt-4 mt-auto">
-
-          <button
-            onClick={() => setOpenPanel('profile')}
-            className="flex flex-col items-center justify-center py-4 text-on-surface-variant/60 hover:text-primary hover:bg-white/5 transition-colors duration-300 w-full group relative"
-            title="Profile"
-          >
-            <span className="material-symbols-outlined text-[22px] font-light group-hover:scale-110 transition-transform">person_outline</span>
-            <span className="opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 absolute left-full ml-4 bg-surface-container-high border border-starlight-white/10 px-3 py-1 rounded text-starlight-white text-xs font-label-sm pointer-events-none transition-all duration-200 z-50 whitespace-nowrap shadow-xl">
-              Creator Profile
-            </span>
-          </button>
-          <button
-            onClick={() => setOpenPanel('settings')}
-            className="flex flex-col items-center justify-center py-4 text-on-surface-variant/60 hover:text-primary hover:bg-white/5 transition-colors duration-300 w-full group relative"
-            title="Archive Settings"
-          >
-            <span className="material-symbols-outlined text-[22px] font-light group-hover:rotate-45 transition-transform duration-500">settings</span>
-            <span className="opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 absolute left-full ml-4 bg-surface-container-high border border-starlight-white/10 px-3 py-1 rounded text-starlight-white text-xs font-label-sm pointer-events-none transition-all duration-200 z-50 whitespace-nowrap shadow-xl">
-              Archive settings
-            </span>
-          </button>
-        </div>
+        <button title="Profile" aria-label="Creator Profile" className="studio-nav-link" onClick={() => { setOpenPanel('profile'); setMobileNav(false); }}><span className="material-symbols-outlined">person</span><span className="rail-label">Creator Profile</span></button>
+        <button title="Archive Settings" aria-label="Archive Settings" className="studio-nav-link" onClick={() => { setOpenPanel('settings'); setMobileNav(false); }}><span className="material-symbols-outlined">settings</span><span className="rail-label">Settings</span></button>
       </nav>
-
-      {openPanel === 'profile' && <CreatorProfileModal onClose={() => setOpenPanel(null)} />}
-      {openPanel === 'settings' && <SettingsModal worldId={worldId ?? null} onClose={() => setOpenPanel(null)} />}
-
-      {/* Primary Stage */}
-      <div className="flex-1 ml-[104px] min-w-0 h-full relative flex flex-col z-10 overflow-hidden bg-void-black">
-        <header className="shrink-0 flex items-center gap-3 px-4 md:px-6 py-3 border-b border-starlight-white/10 bg-surface-container-lowest">
-          <button
-            onClick={() => window.history.state?.idx > 0 ? navigate(-1) : navigate('/worlds')}
-            aria-label="Go back"
-            title="Go back"
-            className="p-1.5 rounded-lg text-on-surface-variant hover:bg-white/5 hover:text-primary"
-          ><span className="material-symbols-outlined text-lg">arrow_back</span></button>
-          <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs min-w-0">
-            <Link to="/worlds" className="text-on-surface-variant/70 hover:text-primary">Worlds</Link>
-            <span aria-hidden="true" className="text-on-surface-variant/30">/</span>
-            <Link to={`/worlds/${worldId}`} className="text-on-surface-variant/70 hover:text-primary truncate max-w-48">{worldName}</Link>
-            <span aria-hidden="true" className="text-on-surface-variant/30">/</span>
-            {manuscriptId && <><Link to={`/worlds/${worldId}/manuscripts`} className="text-on-surface-variant/70 hover:text-primary">Manuscripts</Link><span aria-hidden="true" className="text-on-surface-variant/30">/</span></>}
-            <span aria-current="page" className="text-primary font-medium">{pageTitle}</span>
-            {manuscriptId && chapter && <span className="text-on-surface-variant/60 truncate">· Chapter {chapter.number}: {chapter.title}</span>}
+      <div className="studio-stage">
+        <header className="studio-topbar">
+          <button aria-label="Open navigation" aria-controls="studio-navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(true)} className="p-1 md:hidden"><span className="material-symbols-outlined">menu</span></button>
+          <button aria-label="Go back" title="Go back" className="p-1 text-on-surface-variant hover:text-primary" onClick={() => window.history.state?.idx > 0 ? navigate(-1) : navigate('/worlds')}><span className="material-symbols-outlined text-lg">arrow_back</span></button>
+          <nav aria-label="Breadcrumb" className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <Link to="/worlds" className="text-on-surface-variant">Worlds</Link>
+            {worldId && <><span aria-hidden="true">/</span><Link to={`/worlds/${worldId}`} className="max-w-48 truncate font-headline-md text-base text-on-surface">{worldName}</Link></>}
+            {manuscriptId && <><span aria-hidden="true">/</span><Link to={`/worlds/${worldId}/manuscripts`}>Manuscripts</Link></>}
+            {pageTitle !== 'Worlds' && <><span aria-hidden="true">/</span><span aria-current="page" className="text-primary">{pageTitle}</span></>}
+            {chapter && <span className="hidden text-on-surface-variant lg:inline">· Chapter {chapter.number}: {chapter.title}</span>}
           </nav>
+          <div className="ml-auto shrink-0">
+            <button title="Creator Profile" aria-label="Open creator profile" onClick={() => setOpenPanel('profile')} className="studio-avatar">{user?.email?.slice(0, 1).toUpperCase() || 'O'}</button>
+          </div>
         </header>
-        <div className="flex flex-1 min-h-0 min-w-0 relative overflow-hidden [&>main]:min-h-0 [&>main]:h-full">{children}</div>
+        {writeError && <div role="alert" className="flex shrink-0 items-center justify-between gap-4 border-b border-error/30 bg-error/10 px-5 py-3 text-sm text-error"><span>{writeError}</span><button aria-label="Dismiss error" onClick={() => setWriteError(null)}><span className="material-symbols-outlined text-lg">close</span></button></div>}
+        <div className="studio-content">{children}</div>
       </div>
-
-      {/* Contextual Side Panel (Wings) */}
-      <AnimatePresence>
-        {isEntityPanelOpen && activeEntityId && (
-          <>
-            {/* Dark blur backdrop overlay */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setEntityPanelOpen(false)}
-              className="fixed inset-0 bg-void-black/20 backdrop-blur-[2px] z-30 ml-[104px] cursor-pointer"
-            />
-            {/* Sidebar content container */}
-            <motion.aside 
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="fixed right-0 top-0 bottom-0 w-[440px] sm:w-[480px] max-w-[100vw] z-40 h-full shrink-0"
-            >
-              <ErrorBoundary 
-                fallbackTitle="Could not display entity"
-                onReset={() => setEntityPanelOpen(false)}
-              >
-                <EntityPanel 
-                  key={activeEntityId}
-                  entityId={activeEntityId} 
-                  onClose={() => setEntityPanelOpen(false)} 
-                />
-              </ErrorBoundary>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+      {openPanel === 'profile' && <CreatorProfileModal onClose={() => setOpenPanel(null)} />}
+      {openPanel === 'settings' && <SettingsModal worldId={worldId || null} onClose={() => setOpenPanel(null)} />}
+      {isEntityPanelOpen && activeEntityId && <>
+        <button className="fixed inset-0 z-40 bg-black/30 md:left-16" aria-label="Close entity inspector" onClick={() => setEntityPanelOpen(false)} />
+        <aside aria-label="Entity inspector" className="studio-entity-inspector"><ErrorBoundary fallbackTitle="Could not display entity" onReset={() => setEntityPanelOpen(false)}><EntityPanel key={activeEntityId} entityId={activeEntityId} onClose={() => setEntityPanelOpen(false)} /></ErrorBoundary></aside>
+      </>}
     </div>
   );
 };

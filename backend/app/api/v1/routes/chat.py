@@ -28,6 +28,7 @@ def chat_with_world(
         message=query_in.message.strip(),
         history=query_in.history,
         entity_focus=query_in.entity_focus,
-        timeline_event_focus=query_in.timeline_event_focus
+        timeline_event_focus=query_in.timeline_event_focus,
+        reply_length=load_profile(world.user_id)["preferences"]["chat_reply_length"]
     )
     return response
