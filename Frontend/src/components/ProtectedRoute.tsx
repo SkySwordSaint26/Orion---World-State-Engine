@@ -30,7 +30,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 export const PublicOnlyRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuthStore();
 
-  if (isLoading) {
+  if (isLoading && isAuthenticated) {
     return (
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-void-black text-starlight-white">
         <div className="w-12 h-12 rounded-full border border-copper-glow/40 border-t-copper-glow animate-spin mb-4"></div>

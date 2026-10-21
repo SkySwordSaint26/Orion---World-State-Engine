@@ -86,7 +86,7 @@ export const SignIn: React.FC = () => {
 
           {/* Error Notice */}
           {displayedError && (
-            <div className="mb-6 p-3 rounded bg-red-950/40 border border-red-500/30 text-red-300 text-xs font-body-md flex items-center gap-2">
+            <div role="alert" className="mb-6 p-3 rounded bg-red-950/40 border border-red-500/30 text-red-300 text-xs font-body-md flex items-center gap-2">
               <span className="material-symbols-outlined text-base">error_outline</span>
               <span>{displayedError}</span>
             </div>
@@ -130,6 +130,7 @@ export const SignIn: React.FC = () => {
             <div className="pt-stack-md">
               <button 
                 type="submit" 
+                aria-label={isRegister ? 'Register' : 'Unlock'}
                 disabled={isLoading}
                 className="w-full py-3.5 rounded border border-copper-glow text-copper-glow hover:bg-copper-glow hover:text-void-black uppercase font-label-sm text-xs tracking-widest flex items-center justify-center gap-2 transition-all duration-300 shadow-[0_0_15px_rgba(230,162,126,0.1)] hover:shadow-[0_0_25px_rgba(230,162,126,0.25)] font-semibold disabled:opacity-50"
               >
@@ -182,6 +183,7 @@ export const SignIn: React.FC = () => {
               <button 
                 type="button"
                 onClick={toggleMode}
+                disabled={isLoading}
                 className="text-copper-glow hover:text-primary-fixed-dim transition-colors ml-1.5 underline underline-offset-4"
               >
                 {isRegister ? 'Sign in' : 'Forge an entry'}

@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.DEV ? '/api/v1' : import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 export class ApiError extends Error {
   status: number;
@@ -42,10 +42,21 @@ export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      throw new ApiError('The Orion backend did not respond in time. Please try again.', 0);
+    }
+    if (error instanceof TypeError) {
+      throw new ApiError('Cannot reach the Orion backend. Check that it is running, then try again.', 0);
+    }
+    throw error;
+  }
 
   if (response.status === 401) {
     setToken(null);

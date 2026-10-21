@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { apiFetch, getToken, setToken } from '../api/client';
 
+const AUTH_TIMEOUT_MS = 15_000;
+
 export interface User {
   id: string;
   email: string;
@@ -42,16 +44,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const data = await apiFetch<TokenResponse>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
+        signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
       });
       
       setToken(data.access_token);
-      set({ token: data.access_token, isAuthenticated: true });
-
       // Fetch current user details
-      const user = await apiFetch<User>('/auth/me');
-      set({ user, isLoading: false });
+      const user = await apiFetch<User>('/auth/me', { signal: AbortSignal.timeout(AUTH_TIMEOUT_MS) });
+      set({ user, token: data.access_token, isAuthenticated: true, isLoading: false });
     } catch (err: any) {
+      setToken(null);
       set({ 
+        user: null,
         error: err.message || 'Failed to sign in', 
         isLoading: false, 
         isAuthenticated: false,
@@ -67,6 +70,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await apiFetch<User>('/auth/register', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
+        signal: AbortSignal.timeout(AUTH_TIMEOUT_MS),
       });
       
       // Auto-login after registration
@@ -96,7 +100,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     set({ isLoading: true });
     try {
-      const user = await apiFetch<User>('/auth/me');
+      const user = await apiFetch<User>('/auth/me', { signal: AbortSignal.timeout(AUTH_TIMEOUT_MS) });
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (err) {
       setToken(null);
