@@ -12,6 +12,35 @@ from app.config.logging import get_logger
 
 logger = get_logger(__name__)
 
+
+def update_job_stage_progress(
+    job_id: str,
+    chapter_number: int,
+    stage: str,
+    completed_stages: int,
+    total_stages: int,
+) -> None:
+    """Persist best-effort progress from inside one chapter's extractor subprocess."""
+    db = SessionLocal()
+    try:
+        job = db.get(ProcessingJob, job_id)
+        if not job or job.status == JobStatus.CANCELLED.value or not job.chapters_total:
+            return
+        completed_chapters = db.query(ExtractionRun).filter(
+            ExtractionRun.processing_job_id == job_id,
+            ExtractionRun.status == ExtractionRunStatus.DONE.value,
+        ).count()
+        fraction = completed_chapters + min(completed_stages, total_stages) / max(total_stages, 1)
+        job.progress_percent = min(99, max(job.progress_percent, int(100 * fraction / job.chapters_total)))
+        job.current_chapter = chapter_number
+        job.current_stage = stage
+        db.commit()
+    except Exception as error:
+        db.rollback()
+        logger.warning("Could not persist extraction stage progress for job %s: %s", job_id, error)
+    finally:
+        db.close()
+
 def update_job_progress(job_id: str, db: Optional[Session] = None):
     """
     Rolls up status from all extraction runs attached to a job.
@@ -40,6 +69,13 @@ def update_job_progress(job_id: str, db: Optional[Session] = None):
         failed_count = sum(1 for r in runs if r.status == ExtractionRunStatus.FAILED.value)
 
         job.chapters_completed = completed_count
+        chapter_percent = min(99, int(100 * completed_count / max(job.chapters_total, 1)))
+        if failed_count:
+            job.progress_percent = max(job.progress_percent, chapter_percent)
+        elif completed_count >= len(runs) and len(runs) > 0:
+            job.progress_percent = 100
+        else:
+            job.progress_percent = max(job.progress_percent, chapter_percent)
 
         if failed_count > 0:
             job.status = JobStatus.FAILED.value
@@ -47,8 +83,12 @@ def update_job_progress(job_id: str, db: Optional[Session] = None):
             first_fail = next(r for r in runs if r.status == ExtractionRunStatus.FAILED.value)
             job.error_message = first_fail.error_message
         elif completed_count >= len(runs) and len(runs) > 0:
+            job.current_stage = "Complete"
+            job.current_chapter = None
             job.status = JobStatus.DONE.value
             job.completed_at = datetime.utcnow()
+        elif completed_count:
+            job.current_stage = "Chapter complete"
 
         session.commit()
     finally:

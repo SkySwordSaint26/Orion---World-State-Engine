@@ -16,7 +16,7 @@ from app.services.proposal_service import ProposalService
 from app.services.world_state_service import WorldStateService
 from app.utils.file_handler import read_file_text
 from app.workers.celery_app import celery_app
-from app.workers.tasks.job_update_task import update_job_progress
+from app.workers.tasks.job_update_task import update_job_progress, update_job_stage_progress
 from app.config.logging import get_logger
 
 logger = get_logger(__name__)
@@ -156,7 +156,13 @@ def _execute(
         f"Starting extraction: world={world_id} job={job_id} run={extraction_run_id} "
         f"chapter_id={chapter_id} chapter={chapter_number}"
     )
-    extracted_data = extractor.extract_chapter(chapter_text, chapter_number)
+    extracted_data = extractor.extract_chapter(
+        chapter_text,
+        chapter_number,
+        lambda stage, completed, total: update_job_stage_progress(
+            job_id, chapter_number, stage, completed, total
+        ),
+    )
     check_cancelled()
     _lock_world(db, world_id)
     job = db.get(ProcessingJob, job_id)

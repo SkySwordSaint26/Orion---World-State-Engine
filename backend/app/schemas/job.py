@@ -17,6 +17,9 @@ class JobResponse(BaseModel):
     status: str
     chapters_total: int
     chapters_completed: int
+    progress_percent: int = 0
+    current_stage: Optional[str] = None
+    current_chapter: Optional[int] = None
     error_message: Optional[str] = None
     created_at: datetime
     started_at: Optional[datetime] = None
@@ -27,4 +30,7 @@ class JobStatusResponse(BaseModel):
     status: str
     progress_current: int
     progress_total: int
+    progress_percent: int = 0
+    current_stage: Optional[str] = None
+    current_chapter: Optional[int] = None
     error_message: Optional[str] = None

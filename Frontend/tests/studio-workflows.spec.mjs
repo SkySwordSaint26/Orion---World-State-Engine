@@ -105,6 +105,24 @@ test('cancel import waits for the backend and cancelled jobs stay cancelled on r
   await expect(page.getByRole('button', { name: 'Cancel Import', exact: true })).toHaveCount(0);
 });
 
+test('leaving processing keeps extraction visible in the world shell', async ({ page }) => {
+  await page.goto('/worlds/w1/processing?jobId=job1');
+  await expect(page.getByRole('status')).toContainText('0 of 2 chapters completed');
+  await page.getByRole('link', { name: 'Leave reading in background' }).click();
+  await expect(page).toHaveURL(/\/worlds\/w1$/);
+  await expect(page.getByText(/Extracting manuscript… 0 of 2 chapters completed/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'View progress' })).toHaveAttribute('href', '/worlds/w1/processing?jobId=job1');
+});
+
+test('archive upload opens live extraction progress instead of claiming completion', async ({ page }) => {
+  await page.goto('/worlds/w1/manuscripts');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Browse manuscript files' }).click();
+  await (await chooser).setFiles({ name: 'new-story.txt', mimeType: 'text/plain', buffer: Buffer.from('Chapter one.') });
+  await expect(page).toHaveURL(/\/worlds\/w1\/processing\?jobId=job1/);
+  await expect(page.getByRole('status')).toContainText('0 of 2 chapters completed');
+});
+
 test('EPUB is rejected before creating a world or uploading bytes', async ({ page, world }) => {
   await page.goto('/worlds/new');
   const file = page.getByLabel('Choose manuscript');

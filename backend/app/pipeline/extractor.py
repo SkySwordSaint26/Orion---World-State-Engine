@@ -13,7 +13,7 @@ import tempfile
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from app.config.logging import get_logger
 from app.preprocessing import preprocess_chapter
@@ -30,21 +30,45 @@ ENTITY_TYPES = ("character", "location", "organization")
 SKIP_EVENT_TYPES = {"OTHER"}
 
 
-def run_extractor(text: str, chapter_number: int) -> Dict[str, Any]:
+def run_extractor(
+    text: str,
+    chapter_number: int,
+    progress: Optional[Callable[[str, int, int], None]] = None,
+) -> Dict[str, Any]:
     """Chapter text -> the extractor's gold document. Raises on any failure (the chapter then fails, nothing is stored)."""
     with tempfile.TemporaryDirectory() as tmp:
-        src, out = Path(tmp) / "chapter.txt", Path(tmp) / "chapter.json"
+        src, out, progress_file = Path(tmp) / "chapter.txt", Path(tmp) / "chapter.json", Path(tmp) / "progress.jsonl"
         src.write_text(text, encoding="utf-8")
         check_cancelled()
         with subprocess.Popen([str(EXTRACTOR_PYTHON), "-m", "extractor", "run", str(src), str(out),
-                               "--story-id", f"chapter_{chapter_number}"],
+                               "--story-id", f"chapter_{chapter_number}", "--progress-file", str(progress_file)],
                               cwd=EXTRACTOR_DIR, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True, encoding="utf-8", errors="replace",
                               env={**os.environ, "PYTHONUTF8": "1"}) as process:
             deadline = time.monotonic() + TIMEOUT_S
+            progress_offset = 0
+            progress_buffer = ""
+
+            def drain_progress() -> None:
+                nonlocal progress_offset, progress_buffer
+                if not progress or not progress_file.exists():
+                    return
+                with progress_file.open("r", encoding="utf-8") as stream:
+                    stream.seek(progress_offset)
+                    progress_buffer += stream.read()
+                    progress_offset = stream.tell()
+                lines = progress_buffer.split("\n")
+                progress_buffer = lines.pop()
+                for line in lines:
+                    if not line:
+                        continue
+                    event = json.loads(line)
+                    progress(event["stage"], event["completed"], event["total"])
+
             try:
                 while True:
                     check_cancelled()
+                    drain_progress()
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         raise subprocess.TimeoutExpired(process.args, TIMEOUT_S)
@@ -53,6 +77,7 @@ def run_extractor(text: str, chapter_number: int) -> Dict[str, Any]:
                         break
                     except subprocess.TimeoutExpired:
                         continue
+                drain_progress()
             except BaseException:
                 process.kill()
                 process.communicate()
@@ -200,8 +225,12 @@ def to_legacy(doc: Dict[str, Any], chapter_number: int) -> Dict[str, Any]:
             "identity_evidence": identity_evidence}
 
 
-def extract_chapter(text: str, chapter_number: int) -> Dict[str, Any]:
-    doc = run_extractor(text, chapter_number)
+def extract_chapter(
+    text: str,
+    chapter_number: int,
+    progress: Optional[Callable[[str, int, int], None]] = None,
+) -> Dict[str, Any]:
+    doc = run_extractor(text, chapter_number, progress)
     result = to_legacy(doc, chapter_number)
     logger.info(f"Extractor chapter {chapter_number}: {len(result['entities'])} entities, "
                 f"{sum(len(e['attributes']) for e in result['entities'])} facts, "

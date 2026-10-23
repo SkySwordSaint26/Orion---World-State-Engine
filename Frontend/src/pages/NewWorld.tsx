@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useWorldStore } from '../store/useWorldStore';
 import { apiFetch } from '../api/client';
 import { AppShell } from '../components/AppShell';
+import { useExtractionJobStore } from '../store/useExtractionJobStore';
 
 export const NewWorld: React.FC = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { setActiveWorld } = useWorldStore();
+  const registerExtractionJob = useExtractionJobStore(state => state.register);
   const [worldName, setWorldName] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,6 +45,7 @@ export const NewWorld: React.FC = () => {
 
       // Step 3: Redirect to processing view with job_id
       if (manuscriptRes.job_id) {
+        registerExtractionJob(worldData.id, manuscriptRes.job_id);
         navigate(`/worlds/${worldData.id}/processing?jobId=${manuscriptRes.job_id}`);
       } else {
         navigate(`/worlds/${worldData.id}`);

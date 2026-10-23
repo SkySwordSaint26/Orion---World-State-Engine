@@ -5,6 +5,9 @@ export interface JobStatus {
   status: 'queued' | 'processing' | 'done' | 'failed' | 'cancelled';
   progress_current: number;
   progress_total: number;
+  progress_percent?: number;
+  current_stage?: string | null;
+  current_chapter?: number | null;
   error_message: string | null;
 }
 

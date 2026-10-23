@@ -80,7 +80,15 @@ def cmd_predict_v2(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    doc = extract(args.story_id or Path(args.input).stem, Path(args.input).read_text(encoding="utf-8"))
+    progress_file = Path(args.progress_file) if args.progress_file else None
+
+    def report(stage: str, completed: int, total: int) -> None:
+        if progress_file:
+            with progress_file.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps({"stage": stage, "completed": completed, "total": total}) + "\n")
+                stream.flush()
+
+    doc = extract(args.story_id or Path(args.input).stem, Path(args.input).read_text(encoding="utf-8"), report)
     Path(args.output).write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     return 0
 
@@ -100,6 +108,7 @@ def main(argv=None) -> int:
     r.add_argument("input")
     r.add_argument("output")
     r.add_argument("--story-id")
+    r.add_argument("--progress-file")
     v = sub.add_parser("predict-v2")
     v.add_argument("gold", nargs="+")
     v.add_argument("--out-dir", required=True)

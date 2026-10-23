@@ -7,6 +7,8 @@ import { EntityPanel } from './EntityPanel';
 import { ErrorBoundary } from './ErrorBoundary';
 import { CreatorProfileModal } from './CreatorProfileModal';
 import { SettingsModal } from './SettingsModal';
+import { getJobStatus, cancelJob } from '../api/jobs';
+import { useExtractionJobStore } from '../store/useExtractionJobStore';
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { worldId, manuscriptId } = useParams<{ worldId: string; manuscriptId: string }>();
@@ -18,6 +20,34 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const [openPanel, setOpenPanel] = useState<'profile' | 'settings' | null>(null);
   const [mobileNav, setMobileNav] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
+  const { worldId: extractionWorldId, jobId: extractionJobId, job: extractionJob, update: updateExtractionJob, clear: clearExtractionJob } = useExtractionJobStore();
+  const [cancellingExtraction, setCancellingExtraction] = useState(false);
+
+  useEffect(() => {
+    if (!extractionJobId) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const status = await getJobStatus(extractionJobId, controller.signal);
+        if (controller.signal.aborted) return;
+        updateExtractionJob(status);
+        if (!['done', 'failed', 'cancelled'].includes(status.status)) timer = setTimeout(poll, 1500);
+      } catch {
+        if (!controller.signal.aborted) timer = setTimeout(poll, 3000);
+      }
+    };
+    poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [extractionJobId, updateExtractionJob]);
+
+  const cancelExtraction = async () => {
+    if (!extractionJobId || cancellingExtraction) return;
+    setCancellingExtraction(true);
+    try { updateExtractionJob(await cancelJob(extractionJobId)); }
+    catch (error) { setWriteError(error instanceof Error ? error.message : 'Cancellation was not confirmed.'); }
+    finally { setCancellingExtraction(false); }
+  };
 
   useEffect(() => {
     if (worldId && worldId !== activeWorldId) setActiveWorld(worldId);
@@ -98,6 +128,15 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
         </header>
         {writeError && <div role="alert" className="flex shrink-0 items-center justify-between gap-4 border-b border-error/30 bg-error/10 px-5 py-3 text-sm text-error"><span>{writeError}</span><button aria-label="Dismiss error" onClick={() => setWriteError(null)}><span className="material-symbols-outlined text-lg">close</span></button></div>}
+        {extractionJobId && extractionJob && <div aria-live="polite" className="flex shrink-0 items-center gap-4 border-b border-primary/20 bg-primary/5 px-5 py-3 text-sm text-on-surface">
+          <span className="material-symbols-outlined text-primary">{extractionJob.status === 'done' ? 'check_circle' : extractionJob.status === 'failed' ? 'error' : extractionJob.status === 'cancelled' ? 'pause_circle' : 'progress_activity'}</span>
+          <span className="min-w-0 flex-1">
+            {extractionJob.status === 'done' ? 'Manuscript extraction is complete.' : extractionJob.status === 'failed' ? `Manuscript extraction failed: ${extractionJob.error_message || 'Unknown error.'}` : extractionJob.status === 'cancelled' ? 'Manuscript extraction was cancelled.' : `Extracting manuscript… ${extractionJob.current_chapter ? `Chapter ${extractionJob.current_chapter} · ` : ''}${extractionJob.current_stage || `${extractionJob.progress_current} of ${extractionJob.progress_total} chapters completed`} (${extractionJob.progress_percent ?? (extractionJob.progress_total ? Math.floor(100 * extractionJob.progress_current / extractionJob.progress_total) : 0)}%).`}
+          </span>
+          <Link className="shrink-0 text-primary underline" to={`/worlds/${extractionWorldId}/processing?jobId=${extractionJobId}`}>View progress</Link>
+          {!['done', 'failed', 'cancelled'].includes(extractionJob.status) && <button className="shrink-0 text-primary" disabled={cancellingExtraction} onClick={cancelExtraction}>{cancellingExtraction ? 'Cancelling…' : 'Cancel'}</button>}
+          {['done', 'failed', 'cancelled'].includes(extractionJob.status) && <button aria-label="Dismiss extraction status" className="shrink-0" onClick={clearExtractionJob}><span className="material-symbols-outlined text-lg">close</span></button>}
+        </div>}
         <div className="studio-content">{children}</div>
       </div>
       {openPanel === 'profile' && <CreatorProfileModal onClose={() => setOpenPanel(null)} />}

@@ -47,6 +47,7 @@ export const test = base.extend({
         const contradiction = state.contradictions.find(item => item.id === path.split('/')[4]); Object.assign(contradiction, { status: json.status }); return reply(contradiction);
       }
       if (path === '/worlds/w1/contradictions') return reply(state.contradictions);
+      if (path === '/worlds/w1/manuscripts' && method === 'POST') return reply({ job_id: 'job1', manuscript_id: 'ms2', chapters_total: 2 }, 202);
       if (path === '/worlds/w1/manuscripts') return reply([{ id: 'ms1', title: 'Test Manuscript' }]);
       if (path === '/worlds/w1/manuscripts/ms1/chapters') return reply([chapter]);
       if (path === '/worlds/w1/chapters/ch1') {

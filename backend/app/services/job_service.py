@@ -24,6 +24,9 @@ class JobService:
             "status": job.status,
             "progress_current": job.chapters_completed,
             "progress_total": job.chapters_total,
+            "progress_percent": job.progress_percent,
+            "current_stage": job.current_stage,
+            "current_chapter": job.current_chapter,
             "error_message": job.error_message
         }
 

@@ -1,6 +1,6 @@
 """Runs the extraction stages in order on one story and returns its gold document."""
 import gc
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from app.contracts.gold import GOLD_SCHEMA_VERSION
 from app.evaluation.schema import load_schema, schema_errors
@@ -34,12 +34,23 @@ def release_llm(doc: Dict[str, Any]) -> None:
 # Each stage appends to the document's lists in place; stages are added phase by phase (see the plan).
 STAGES: Tuple[Callable[[Dict[str, Any]], None], ...] = (release_llm, mentions, coref, events, temporal,
                                                         release_encoders, llm_types, relations, facts, release_llm)
+STAGE_NAMES = (
+    "Preparing models", "Finding mentions", "Resolving coreference", "Extracting events",
+    "Ordering events", "Releasing encoders", "Typing events", "Extracting relationships",
+    "Extracting facts", "Finalizing extraction",
+)
 
 
-def extract(story_id: str, text: str) -> Dict[str, Any]:
+def extract(
+    story_id: str,
+    text: str,
+    progress: Optional[Callable[[str, int, int], None]] = None,
+) -> Dict[str, Any]:
     doc = {"schema_version": GOLD_SCHEMA_VERSION, "story_id": story_id, "text": text, **{k: [] for k in LISTS}}
-    for stage in STAGES:
+    for index, stage in enumerate(STAGES):
         stage(doc)
+        if progress:
+            progress(STAGE_NAMES[index], index + 1, len(STAGES))
     errors = schema_errors(doc)
     if errors:
         raise ValueError(f"{story_id}: output violates the gold schema: {errors[:5]}")

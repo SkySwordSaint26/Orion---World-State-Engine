@@ -212,7 +212,7 @@ def test_resolve_then_reextract_through_the_api_does_not_offer_the_conflict_agai
     env, world_id, client = api
     colors = {1: "dark brown", 2: "green"}
     monkeypatch.setattr(settings, "EXTRACTION_EXECUTOR", "background")
-    monkeypatch.setattr(extractor, "extract_chapter", lambda text, chapter_number:
+    monkeypatch.setattr(extractor, "extract_chapter", lambda text, chapter_number, progress=None:
                         chapter_data([person("Arin", eye_color=colors[chapter_number])]))
     app.dependency_overrides[get_current_user] = lambda: User(id="u-phase1", email="phase1@example.com")
     base = f"/api/v1/worlds/{world_id}"

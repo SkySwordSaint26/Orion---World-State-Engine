@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { AppShell } from '../components/AppShell';
 import { useWorldStore } from '../store/useWorldStore';
 import { apiFetch } from '../api/client';
+import { useExtractionJobStore } from '../store/useExtractionJobStore';
 
 export const Manuscripts: React.FC = () => {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export const Manuscripts: React.FC = () => {
     fetchManuscriptsForWorld,
     deleteChapter
   } = useWorldStore();
+  const registerExtractionJob = useExtractionJobStore(state => state.register);
 
   const [expandedManuscriptId, setExpandedManuscriptId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -69,6 +71,11 @@ export const Manuscripts: React.FC = () => {
             method: 'POST',
             body: formData,
           });
+          if (res.job_id) {
+            registerExtractionJob(worldId, res.job_id);
+            navigate(`/worlds/${worldId}/processing?jobId=${res.job_id}`);
+            return;
+          }
           const fresh = await fetchManuscriptsForWorld(worldId);
           if (res.manuscript_id) {
             setExpandedManuscriptId(res.manuscript_id);

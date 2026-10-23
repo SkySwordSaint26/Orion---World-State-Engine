@@ -47,6 +47,14 @@ def test_an_empty_extraction_is_a_schema_valid_document(monkeypatch):
     assert out["text"] == TEXT and all(out[k] == [] for k in LISTS)
 
 
+def test_extract_reports_completed_stages(monkeypatch):
+    monkeypatch.setattr("extractor.pipeline.STAGES", (lambda doc: None, lambda doc: None))
+    monkeypatch.setattr("extractor.pipeline.STAGE_NAMES", ("First", "Second"))
+    progress = []
+    extract("story", TEXT, lambda stage, completed, total: progress.append((stage, completed, total)))
+    assert progress == [("First", 1, 2), ("Second", 2, 2)]
+
+
 def test_b3_gives_nothing_for_an_empty_prediction():
     b3 = coreference_b3(doc([], []), GOLD)
     assert (b3["precision"], b3["recall"], b3["f1"]) == (0.0, 0.0, 0.0)

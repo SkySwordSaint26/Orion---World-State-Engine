@@ -267,10 +267,13 @@ Asynchronous background extraction jobs are tracked through Celery and database 
     "status": "processing",
     "progress_current": 5,
     "progress_total": 8,
+    "progress_percent": 64,
+    "current_stage": "Extracting relationships",
+    "current_chapter": 6,
     "error_message": null
   }
   ```
-  *Status Values:* `queued`, `processing`, `done`, `failed`.
+  *Status Values:* `queued`, `processing`, `done`, `failed`, `cancelled`. `progress_current` and `progress_total` remain completed-chapter counts; `progress_percent` and the current stage provide finer-grained extraction progress.
 
 ---
 

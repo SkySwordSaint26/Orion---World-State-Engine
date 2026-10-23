@@ -55,7 +55,7 @@ class Phase1Env:
     def install_fake_extractor(self) -> None:
         env = self
 
-        def fake_extract_chapter(text, chapter_number):
+        def fake_extract_chapter(text, chapter_number, progress=None):
             tag = re.search(r"\[(\w+)\]", text).group(1)
             env.extract_calls.append((tag, chapter_number))
             if (tag, chapter_number) in env.extract_fail:
